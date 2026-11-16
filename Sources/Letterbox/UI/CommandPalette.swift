@@ -82,7 +82,7 @@ struct CommandPalette: View {
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.raised))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.strongLine, lineWidth: 1))
             .shadow(color: .black.opacity(0.25), radius: 40, y: 20)
-            .padding(.top, 80)
+            .padding(.top, Theme.s(80))
             .animation(.snappy(duration: 0.2), value: chatting)
         }
         .onAppear {
@@ -110,13 +110,13 @@ struct CommandPalette: View {
     }
 
     private var inputBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.s(12)) {
             Image(systemName: chatting ? "sparkle" : "magnifyingglass")
-                .font(.system(size: 15, weight: .medium))
+                .font(Theme.font(size: 15, weight: .medium))
                 .foregroundStyle(Theme.text3)
             TextField(chatting ? "Ask a follow-up…" : "Search, run a command, or ask Claude anything…", text: $query)
                 .textFieldStyle(.plain)
-                .font(.system(size: 17))
+                .font(Theme.font(size: 17))
                 .focused($focused)
                 .onSubmit { chatting ? ask(query) : run() }
                 .onChange(of: query) { _, _ in highlighted = 0 }
@@ -128,18 +128,18 @@ struct CommandPalette: View {
                     query = ""
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
+                .font(Theme.font(size: 12, weight: .medium))
                 .foregroundStyle(Theme.text2)
             }
-            Text("esc").font(.system(size: 10.5, weight: .medium)).foregroundStyle(Theme.text3)
-                .padding(.horizontal, 6).frame(height: 18).background(RoundedRectangle(cornerRadius: 4).fill(Theme.sunken))
+            Text("esc").font(Theme.font(size: 10.5, weight: .medium)).foregroundStyle(Theme.text3)
+                .padding(.horizontal, Theme.s(6)).frame(height: 18).background(RoundedRectangle(cornerRadius: 4).fill(Theme.sunken))
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, Theme.s(18))
         .frame(height: 56)
     }
 
     private var footer: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: Theme.s(14)) {
             if chatting {
                 hint("↵", "ask")
                 hint("esc", "close")
@@ -150,28 +150,28 @@ struct CommandPalette: View {
             }
             Spacer()
             SparkleIcon(size: 10)
-            Text(store.aiReady ? "Claude \(store.aiModel.capitalized)" : "Claude offline").font(.system(size: 11)).foregroundStyle(Theme.text3)
+            Text(store.aiReady ? "Claude \(store.aiModel.capitalized)" : "Claude offline").font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Theme.s(16))
         .frame(height: 32)
     }
 
     private var resultList: some View {
         let list = items
         return ScrollView {
-            VStack(spacing: 1) {
+            VStack(spacing: Theme.s(1)) {
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, item in
-                    HStack(spacing: 12) {
+                    HStack(spacing: Theme.s(12)) {
                         Image(systemName: item.symbol)
-                            .font(.system(size: 12.5))
+                            .font(Theme.font(size: 12.5))
                             .foregroundStyle(Theme.text2)
                             .frame(width: 26, height: 26)
                             .background(RoundedRectangle(cornerRadius: 7).fill(Theme.sunken))
-                        Text(item.title).font(.system(size: 13.5)).foregroundStyle(Theme.text).lineLimit(1)
+                        Text(item.title).font(Theme.font(size: 13.5)).foregroundStyle(Theme.text).lineLimit(1)
                         Spacer()
-                        if let s = item.subtitle { Text(s).font(.system(size: 11.5)).foregroundStyle(Theme.text3).lineLimit(1) }
+                        if let s = item.subtitle { Text(s).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3).lineLimit(1) }
                     }
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, Theme.s(10))
                     .frame(height: 40)
                     .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(i == highlighted ? Theme.accentSoft : .clear))
                     .contentShape(Rectangle())
@@ -179,16 +179,16 @@ struct CommandPalette: View {
                     .onHover { if $0 { highlighted = i } }
                 }
             }
-            .padding(8)
+            .padding(Theme.s(8))
         }
         .frame(maxHeight: 400)
         .fixedSize(horizontal: false, vertical: true)
     }
 
     private func hint(_ key: String, _ label: String) -> some View {
-        HStack(spacing: 5) {
-            Text(key).font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Theme.text2)
-            Text(label).font(.system(size: 11)).foregroundStyle(Theme.text3)
+        HStack(spacing: Theme.s(5)) {
+            Text(key).font(Theme.font(size: 10.5, weight: .semibold)).foregroundStyle(Theme.text2)
+            Text(label).font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
         }
     }
 
@@ -219,12 +219,12 @@ struct AskChatView: View {
     var body: some View {
         ScrollViewReader { proxy in
             MaybeScroll {
-                VStack(alignment: .leading, spacing: 26) {
+                VStack(alignment: .leading, spacing: Theme.s(26)) {
                     ForEach(session.turns.indices, id: \.self) { i in
                         turnView(i).id(session.turns[i].id)
                     }
                 }
-                .padding(20)
+                .padding(Theme.s(20))
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(minHeight: 200, maxHeight: 520)
@@ -237,24 +237,24 @@ struct AskChatView: View {
     @ViewBuilder
     private func turnView(_ i: Int) -> some View {
         let t = session.turns[i]
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.s(12)) {
             Text(t.question)
-                .font(.system(size: 13, weight: .medium))
+                .font(Theme.font(size: 13, weight: .medium))
                 .foregroundStyle(Theme.text2)
             if !t.done {
-                HStack(spacing: 10) {
+                HStack(spacing: Theme.s(10)) {
                     ThinkingBar().frame(width: 90)
-                    Text(t.stage).font(.system(size: 12)).foregroundStyle(Theme.text3)
+                    Text(t.stage).font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
                     Spacer()
-                    Button("Stop") { session.task?.cancel() }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Theme.text2)
+                    Button("Stop") { session.task?.cancel() }.buttonStyle(.plain).font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                 }
             }
             if let e = t.error {
-                Text(e).font(.system(size: 13)).foregroundStyle(Theme.urgent)
+                Text(e).font(Theme.font(size: 13)).foregroundStyle(Theme.urgent)
             }
             if !t.answer.isEmpty {
                 Text(t.answer)
-                    .font(.system(size: 14))
+                    .font(Theme.font(size: 14))
                     .lineSpacing(4)
                     .foregroundStyle(Theme.text)
                     .textSelection(.enabled)
@@ -266,7 +266,7 @@ struct AskChatView: View {
     }
 
     private func sources(_ refs: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.s(4)) {
             Text("Sources").microLabel()
             ForEach(refs.prefix(6), id: \.self) { id in
                 if let c = store.conversationByID[id] {
@@ -276,14 +276,14 @@ struct AskChatView: View {
                         store.sidebarSelection = .folder(m.folder)
                         store.selection = [m.id]
                     } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "envelope").font(.system(size: 10.5)).foregroundStyle(Theme.text3)
-                            Text(c.counterpart.display).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.text)
-                            Text(c.subject).font(.system(size: 12)).foregroundStyle(Theme.text3).lineLimit(1)
+                        HStack(spacing: Theme.s(8)) {
+                            Image(systemName: "envelope").font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
+                            Text(c.counterpart.display).font(Theme.font(size: 12, weight: .medium)).foregroundStyle(Theme.text)
+                            Text(c.subject).font(Theme.font(size: 12)).foregroundStyle(Theme.text3).lineLimit(1)
                             Spacer()
-                            Text(RelativeDate.short(c.latest.date)).font(.system(size: 11)).foregroundStyle(Theme.text3)
+                            Text(RelativeDate.short(c.latest.date)).font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
                         }
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, Theme.s(10))
                         .frame(height: 28)
                         .background(RoundedRectangle(cornerRadius: 7).fill(Theme.sunken))
                     }
@@ -301,17 +301,17 @@ struct ActionCard: View {
     @State private var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.s(12)) {
+            HStack(spacing: Theme.s(8)) {
                 Image(systemName: action.kind == .trash ? "trash" : action.kind == .archive ? "archivebox" : action.kind == .flag ? "flag" : "envelope.open")
-                    .font(.system(size: 12)).foregroundStyle(Theme.text2)
+                    .font(Theme.font(size: 12)).foregroundStyle(Theme.text2)
                 Text("\(action.verb) · \(action.selected.count) of \(action.conversations.count) conversations")
-                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.text)
+                    .font(Theme.font(size: 13, weight: .semibold)).foregroundStyle(Theme.text)
                 Spacer()
                 Button(expanded ? "Hide list" : "Review list") { withAnimation(.snappy) { expanded.toggle() } }
-                    .buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.text2)
+                    .buttonStyle(.plain).font(Theme.font(size: 12, weight: .medium)).foregroundStyle(Theme.text2)
             }
-            Text(action.summary).font(.system(size: 12.5)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
+            Text(action.summary).font(Theme.font(size: 12.5)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
             if expanded {
                 ScrollView {
                     VStack(spacing: 0) {
@@ -323,9 +323,9 @@ struct ActionCard: View {
                 .frame(maxHeight: 220)
                 .panel(radius: 8, fill: Theme.panel)
             }
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.s(8)) {
                 if action.executed {
-                    Label("Done", systemImage: "checkmark").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.success)
+                    Label("Done", systemImage: "checkmark").font(Theme.font(size: 12.5, weight: .medium)).foregroundStyle(Theme.success)
                 } else {
                     PillButton(title: action.verb, symbol: nil, style: .primary, compact: true) {
                         let n = store.perform(action)
@@ -335,27 +335,27 @@ struct ActionCard: View {
                     .disabled(action.selected.isEmpty)
                     PillButton(title: "Dismiss", style: .ghost, compact: true) { action.selected = []; action.executed = true }
                     if action.kind == .trash {
-                        Text("Moves to Trash — you can restore from there.").font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                        Text("Moves to Trash — you can restore from there.").font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
                     }
                 }
             }
         }
-        .padding(14)
+        .padding(Theme.s(14))
         .panel(radius: 10, fill: Theme.sunken)
     }
 
     private func row(_ id: String, _ c: Conversation) -> some View {
         let on = action.selected.contains(id)
-        return HStack(spacing: 10) {
+        return HStack(spacing: Theme.s(10)) {
             Image(systemName: on ? "checkmark.square.fill" : "square")
-                .font(.system(size: 13))
+                .font(Theme.font(size: 13))
                 .foregroundStyle(on ? Theme.text : Theme.text3)
-            Text(c.counterpart.display).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.text).frame(width: 150, alignment: .leading).lineLimit(1)
-            Text(c.subject).font(.system(size: 12)).foregroundStyle(Theme.text3).lineLimit(1)
+            Text(c.counterpart.display).font(Theme.font(size: 12, weight: .medium)).foregroundStyle(Theme.text).frame(width: 150, alignment: .leading).lineLimit(1)
+            Text(c.subject).font(Theme.font(size: 12)).foregroundStyle(Theme.text3).lineLimit(1)
             Spacer()
-            Text(RelativeDate.short(c.latest.date)).font(.system(size: 11)).foregroundStyle(Theme.text3)
+            Text(RelativeDate.short(c.latest.date)).font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, Theme.s(10))
         .frame(height: 30)
         .contentShape(Rectangle())
         .onTapGesture {

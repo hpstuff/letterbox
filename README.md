@@ -43,7 +43,7 @@ Letterbox is a small, dependency-free SwiftUI app that keeps your mail in a loca
 - Alias detection — mail sent to your aliases is labeled, and replies go out from the right address.
 - Keyboard-first: `↑↓`/`J K` navigate, `E` archive, `⌫` trash, `R` reply, `D` draft with Claude, `⌘K` command palette.
 - Safe HTML rendering (no JavaScript, optional remote-image blocking), attachments with image previews.
-- Light and dark mode, in a calm, paper-and-ink design.
+- Light and dark mode, in a calm, paper-and-ink design — or pick another color theme, font, text size and spacing in Settings → Appearance.
 
 <table>
   <tr>

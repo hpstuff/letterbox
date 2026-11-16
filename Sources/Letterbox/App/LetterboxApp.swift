@@ -9,6 +9,7 @@ struct LetterboxApp: App {
         Window("Letterbox", id: "main") {
             RootView()
                 .environment(store)
+                .themed()
         }
         .defaultSize(width: 1440, height: 900)
         .windowStyle(.hiddenTitleBar)
@@ -19,6 +20,7 @@ struct LetterboxApp: App {
             if let id, let draft = store.drafts[id] {
                 ComposeView(draft: draft)
                     .environment(store)
+                    .themed()
             }
         }
         .defaultSize(width: 720, height: 640)
@@ -40,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Snapshot.run(to: dir)
             return
         }
+        AppearanceSettings.shared.applyMode()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }

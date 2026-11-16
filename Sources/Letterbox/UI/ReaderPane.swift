@@ -32,21 +32,21 @@ private struct ReaderToolbar: View {
         let ids = Array(store.selection)
         let none = ids.isEmpty
         let single = store.openedMessage
-        HStack(spacing: 4) {
+        HStack(spacing: Theme.s(4)) {
             if dismissable {
                 IconButton(symbol: "xmark", help: "Close") { store.selection = [] }
-                Rectangle().fill(Theme.hairline).frame(width: 1, height: 18).padding(.horizontal, 4)
+                Rectangle().fill(Theme.hairline).frame(width: 1, height: 18).padding(.horizontal, Theme.s(4))
             }
             IconButton(symbol: "archivebox", help: "Archive (E)") { store.archive(ids) }.disabled(none)
             IconButton(symbol: "trash", help: "Move to Trash (⌫)") { store.trash(ids) }.disabled(none)
             IconButton(symbol: "xmark.bin", help: "Junk / Not Junk") { store.markJunk(ids) }.disabled(none)
-            Rectangle().fill(Theme.hairline).frame(width: 1, height: 18).padding(.horizontal, 4)
+            Rectangle().fill(Theme.hairline).frame(width: 1, height: 18).padding(.horizontal, Theme.s(4))
             IconButton(symbol: single?.flagged == true ? "flag.fill" : "flag", help: "Flag (S)", tint: single?.flagged == true ? Theme.high : Theme.text2) { store.toggleFlag(ids) }.disabled(none)
             IconButton(symbol: single?.seen == false ? "envelope.badge.fill" : "envelope.badge", help: "Read / Unread (U)") { store.toggleRead(ids) }.disabled(none)
             Menu {
                 ForEach(store.folders) { f in Button(f.displayName) { store.move(ids, to: f.path) } }
             } label: {
-                Image(systemName: "folder").font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.text2)
+                Image(systemName: "folder").font(Theme.font(size: 13, weight: .medium)).foregroundStyle(Theme.text2)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
@@ -60,7 +60,7 @@ private struct ReaderToolbar: View {
                     Button("Reply All") { store.reply(all: true, to: single) }
                     Button("Forward") { store.forward() }
                 } label: {
-                    Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
+                    Image(systemName: "chevron.down").font(Theme.font(size: 10, weight: .bold))
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
@@ -68,7 +68,7 @@ private struct ReaderToolbar: View {
                 DraftWithClaudeButton(message: single)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, Theme.s(12))
         .frame(height: 54)
         .padding(.top, dismissable ? 0 : 0)
     }
@@ -87,7 +87,7 @@ struct DraftWithClaudeButton: View {
                     Button(tone.rawValue) { store.draftWithClaude(message, tone: tone) }
                 }
             } label: {
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                Image(systemName: "chevron.down").font(Theme.font(size: 9, weight: .bold))
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
@@ -103,13 +103,13 @@ private struct EmptyReader: View {
     @Environment(MailStore.self) private var store
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: Theme.s(14)) {
             ZStack {
                 RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.accentSoft).frame(width: 72, height: 72)
-                Image(systemName: "envelope.open").font(.system(size: 26, weight: .light)).foregroundStyle(Theme.accentText)
+                Image(systemName: "envelope.open").font(Theme.font(size: 26, weight: .light)).foregroundStyle(Theme.accentText)
             }
-            Text("Select a message").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.text)
-            VStack(spacing: 6) {
+            Text("Select a message").font(Theme.font(size: 16, weight: .semibold)).foregroundStyle(Theme.text)
+            VStack(spacing: Theme.s(6)) {
                 shortcut("↑ ↓", "Navigate")
                 shortcut("E", "Archive")
                 shortcut("D", "Draft reply with Claude")
@@ -119,12 +119,12 @@ private struct EmptyReader: View {
     }
 
     private func shortcut(_ key: String, _ label: String) -> some View {
-        HStack(spacing: 10) {
-            Text(key).font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundStyle(Theme.text2)
-                .padding(.horizontal, 7).frame(minWidth: 34, minHeight: 20)
+        HStack(spacing: Theme.s(10)) {
+            Text(key).font(Theme.font(size: 11, weight: .semibold, design: .monospaced)).foregroundStyle(Theme.text2)
+                .padding(.horizontal, Theme.s(7)).frame(minWidth: 34, minHeight: 20)
                 .background(RoundedRectangle(cornerRadius: 5).fill(Theme.sunken))
                 .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.hairline))
-            Text(label).font(.system(size: 12)).foregroundStyle(Theme.text3)
+            Text(label).font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
             Spacer()
         }
         .frame(width: 220)
@@ -136,7 +136,7 @@ private struct MultiSelectionView: View {
     let count: Int
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: Theme.s(18)) {
             ZStack {
                 ForEach(0..<3) { i in
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -148,8 +148,8 @@ private struct MultiSelectionView: View {
                 }
                 Text("\(count)").font(Theme.serif(32, .regular)).foregroundStyle(Theme.text)
             }
-            Text("\(count) messages selected").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.text)
-            HStack(spacing: 8) {
+            Text("\(count) messages selected").font(Theme.font(size: 16, weight: .semibold)).foregroundStyle(Theme.text)
+            HStack(spacing: Theme.s(8)) {
                 let ids = Array(store.selection)
                 PillButton(title: "Archive", symbol: "archivebox") { store.archive(ids) }
                 PillButton(title: "Mark read", symbol: "envelope.open") { store.toggleRead(ids) }
@@ -172,7 +172,7 @@ struct MessageDetailView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Theme.s(16)) {
             Text(message.displaySubject)
                 .font(Theme.display(23, .bold))
                 .tracking(-0.3)
@@ -180,13 +180,13 @@ struct MessageDetailView: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
 
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Theme.s(12)) {
                 AvatarView(name: message.fromName, email: message.fromEmail, size: 42)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .firstTextBaseline, spacing: 7) {
-                        Text(message.senderDisplay).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.text)
+                VStack(alignment: .leading, spacing: Theme.s(3)) {
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.s(7)) {
+                        Text(message.senderDisplay).font(Theme.font(size: 14, weight: .semibold)).foregroundStyle(Theme.text)
                         if !message.fromName.isEmpty {
-                            Text(message.fromEmail).font(.system(size: 12.5)).foregroundStyle(Theme.text3)
+                            Text(message.fromEmail).font(Theme.font(size: 12.5)).foregroundStyle(Theme.text3)
                         }
                     }
                     .lineLimit(1)
@@ -201,8 +201,8 @@ struct MessageDetailView: View {
                     recipients
                 }
                 Spacer(minLength: 8)
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text(RelativeDate.detailed(message.date)).font(.system(size: 12)).foregroundStyle(Theme.text3)
+                VStack(alignment: .trailing, spacing: Theme.s(6)) {
+                    Text(RelativeDate.detailed(message.date)).font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
                     if let alias = store.receivingAlias(for: message) {
                         TagChip(text: alias, symbol: "at", color: Theme.accentText).help("Received at this alias — replies come from it")
                     }
@@ -215,9 +215,9 @@ struct MessageDetailView: View {
                 AttachmentStrip(attachments: parsed.attachments)
             }
         }
-        .padding(.horizontal, 26)
-        .padding(.top, 22)
-        .padding(.bottom, 16)
+        .padding(.horizontal, Theme.s(26))
+        .padding(.top, Theme.s(22))
+        .padding(.bottom, Theme.s(16))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -228,7 +228,7 @@ struct MessageDetailView: View {
         if !message.to.isEmpty { parts.append("to " + message.to.map(name).joined(separator: ", ")) }
         if !message.cc.isEmpty { parts.append("cc " + message.cc.map(name).joined(separator: ", ")) }
         return Text(parts.joined(separator: "  ·  "))
-            .font(.system(size: 12.5))
+            .font(Theme.font(size: 12.5))
             .foregroundStyle(Theme.text3)
             .lineLimit(2)
             .help((message.to + message.cc).map(MessageBuilder.format).joined(separator: ", "))
@@ -242,19 +242,19 @@ struct MessageDetailView: View {
             let isHTML = parsed.html?.isEmpty == false
             VStack(spacing: 0) {
                 if blocked && MessageHTML.cachedHasRemote(parsed, key: message.id) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Theme.s(8)) {
                         Image(systemName: "eye.slash")
                         Text("Remote images blocked for privacy.")
                         Spacer()
                         Button("Load images") { allowRemoteFor.insert(message.id) }.buttonStyle(.link)
                     }
-                    .font(.system(size: 12))
+                    .font(Theme.font(size: 12))
                     .foregroundStyle(Theme.text2)
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, Theme.s(14))
                     .frame(height: 34)
                     .panel(radius: 9, fill: Theme.sunken)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, Theme.s(20))
+                    .padding(.bottom, Theme.s(10))
                 }
                 MessageWebView(
                     document: MessageHTML.cachedDocument(for: parsed, key: message.id),
@@ -271,13 +271,13 @@ struct MessageDetailView: View {
         case .loading:
             LoadingBody()
         case .failed(let reason):
-            VStack(spacing: 10) {
-                Image(systemName: "exclamationmark.icloud").font(.system(size: 26)).foregroundStyle(Theme.text3)
-                Text("Couldn’t load this message").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.text)
-                Text(reason).font(.system(size: 12)).foregroundStyle(Theme.text3).multilineTextAlignment(.center)
+            VStack(spacing: Theme.s(10)) {
+                Image(systemName: "exclamationmark.icloud").font(Theme.font(size: 26)).foregroundStyle(Theme.text3)
+                Text("Couldn’t load this message").font(Theme.font(size: 14, weight: .semibold)).foregroundStyle(Theme.text)
+                Text(reason).font(Theme.font(size: 12)).foregroundStyle(Theme.text3).multilineTextAlignment(.center)
                 PillButton(title: "Try again", symbol: "arrow.clockwise") { store.retryOpen() }
             }
-            .padding(30)
+            .padding(Theme.s(30))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case nil:
             Color.clear
@@ -297,47 +297,47 @@ struct InsightCard: View {
         let busy = store.summarizing.contains(message.id)
         let convo = store.conversation(for: message.id)
         if insight != nil || deep != nil || store.aiReady || (convo?.count ?? 0) > 1 {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.s(12)) {
+                HStack(spacing: Theme.s(8)) {
                     SparkleIcon(size: 11)
-                    Text(statusLine(insight, convo)).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.text2)
+                    Text(statusLine(insight, convo)).font(Theme.font(size: 12, weight: .medium)).foregroundStyle(Theme.text2)
                     if let insight, insight.priority >= 3 {
-                        Text("Urgent").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Theme.urgent)
+                        Text("Urgent").font(Theme.font(size: 11.5, weight: .medium)).foregroundStyle(Theme.urgent)
                     }
                     Spacer()
                     if deep == nil && store.aiReady {
                         Button(busy ? "Reading…" : "Summarize") { store.summarize(message) }
-                            .buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.text2).disabled(busy)
+                            .buttonStyle(.plain).font(Theme.font(size: 12, weight: .medium)).foregroundStyle(Theme.text2).disabled(busy)
                     }
                     if let insight, !insight.done, insight.priority >= 1 {
                         Button { store.setDone(message.id) } label: { Label("Done", systemImage: "checkmark") }
-                            .buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.text2)
+                            .buttonStyle(.plain).font(Theme.font(size: 12, weight: .medium)).foregroundStyle(Theme.text2)
                     }
                 }
                 if busy { ThinkingBar() }
                 if let deep {
-                    Text(deep.tldr).font(.system(size: 13.5)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
+                    Text(deep.tldr).font(Theme.font(size: 13.5)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
                     ForEach(deep.keyPoints, id: \.self) { p in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline, spacing: Theme.s(8)) {
                             Text("–").foregroundStyle(Theme.text3)
-                            Text(p).font(.system(size: 12.5)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
+                            Text(p).font(Theme.font(size: 12.5)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     ForEach(deep.actionItems, id: \.self) { a in
-                        Label(a, systemImage: "arrow.turn.down.right").font(.system(size: 12.5)).foregroundStyle(Theme.text)
+                        Label(a, systemImage: "arrow.turn.down.right").font(Theme.font(size: 12.5)).foregroundStyle(Theme.text)
                     }
                 } else if let insight {
-                    Text(insight.summary).font(.system(size: 13.5)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
+                    Text(insight.summary).font(Theme.font(size: 13.5)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
                     if !insight.action.isEmpty {
-                        Label(insight.action, systemImage: "arrow.turn.down.right").font(.system(size: 12.5)).foregroundStyle(Theme.text2)
+                        Label(insight.action, systemImage: "arrow.turn.down.right").font(Theme.font(size: 12.5)).foregroundStyle(Theme.text2)
                     }
                 } else if !busy {
-                    Text("Not analyzed yet.").font(.system(size: 12.5)).foregroundStyle(Theme.text3)
+                    Text("Not analyzed yet.").font(Theme.font(size: 12.5)).foregroundStyle(Theme.text3)
                 }
                 if let insight, !insight.timeline.isEmpty { TimelineStrip(events: insight.timeline) }
                 if let convo, convo.count > 1 { thread(convo) }
             }
-            .padding(14)
+            .padding(Theme.s(14))
             .panel(radius: 10, fill: Theme.sunken)
         }
     }
@@ -360,9 +360,9 @@ struct InsightCard: View {
     private func thread(_ c: Conversation) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Button { withAnimation(.snappy(duration: 0.2)) { showThread.toggle() } } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: showThread ? "chevron.down" : "chevron.right").font(.system(size: 9, weight: .semibold))
-                    Text("Conversation · \(c.count) messages").font(.system(size: 11.5, weight: .medium))
+                HStack(spacing: Theme.s(6)) {
+                    Image(systemName: showThread ? "chevron.down" : "chevron.right").font(Theme.font(size: 9, weight: .semibold))
+                    Text("Conversation · \(c.count) messages").font(Theme.font(size: 11.5, weight: .medium))
                 }
                 .foregroundStyle(Theme.text3)
             }
@@ -371,27 +371,27 @@ struct InsightCard: View {
             if showThread {
                 ForEach(c.messages.suffix(8)) { m in
                     let current = m.id == message.id
-                    HStack(spacing: 10) {
+                    HStack(spacing: Theme.s(10)) {
                         Circle().fill(c.isFromMe(m) ? Theme.text3 : Theme.text).frame(width: 5, height: 5)
                         Text(c.isFromMe(m) ? "You" : m.senderDisplay)
-                            .font(.system(size: 12, weight: current ? .semibold : .regular))
+                            .font(Theme.font(size: 12, weight: current ? .semibold : .regular))
                             .foregroundStyle(Theme.text)
                             .frame(width: 110, alignment: .leading)
                             .lineLimit(1)
                         Text(m.snippet.isEmpty ? m.displaySubject : m.snippet)
-                            .font(.system(size: 12)).foregroundStyle(Theme.text3).lineLimit(1)
+                            .font(Theme.font(size: 12)).foregroundStyle(Theme.text3).lineLimit(1)
                         Spacer(minLength: 8)
-                        Text(RelativeDate.short(m.date)).font(.system(size: 11).monospacedDigit()).foregroundStyle(Theme.text3)
+                        Text(RelativeDate.short(m.date)).font(Theme.font(size: 11).monospacedDigit()).foregroundStyle(Theme.text3)
                     }
-                    .padding(.vertical, 5)
-                    .padding(.horizontal, 6)
+                    .padding(.vertical, Theme.s(5))
+                    .padding(.horizontal, Theme.s(6))
                     .background(RoundedRectangle(cornerRadius: 6).fill(current ? Theme.hover : .clear))
                     .contentShape(Rectangle())
                     .onTapGesture { if !current { store.selection = [m.id] } }
                 }
             }
         }
-        .padding(.top, 2)
+        .padding(.top, Theme.s(2))
     }
 }
 
@@ -402,24 +402,24 @@ struct TimelineStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(events.enumerated()), id: \.offset) { idx, e in
-                HStack(alignment: .top, spacing: 10) {
+                HStack(alignment: .top, spacing: Theme.s(10)) {
                     VStack(spacing: 0) {
                         Circle()
                             .strokeBorder(e.upcoming ? Theme.text : Theme.text3, lineWidth: 1.2)
                             .background(Circle().fill(e.upcoming ? Theme.sunken : Theme.text3))
                             .frame(width: 7, height: 7)
-                            .padding(.top, 4)
+                            .padding(.top, Theme.s(4))
                         if idx < events.count - 1 {
                             Rectangle().fill(Theme.hairline).frame(width: 1).frame(maxHeight: .infinity)
                         }
                     }
                     .frame(width: 8)
                     Text(e.day.map { $0.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) } ?? e.date)
-                        .font(.system(size: 11.5).monospacedDigit())
+                        .font(Theme.font(size: 11.5).monospacedDigit())
                         .foregroundStyle(e.upcoming ? Theme.text : Theme.text3)
                         .frame(width: 84, alignment: .leading)
                     Text(e.text)
-                        .font(.system(size: 12.5))
+                        .font(Theme.font(size: 12.5))
                         .foregroundStyle(e.upcoming ? Theme.text : Theme.text2)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.bottom, idx < events.count - 1 ? 8 : 0)
@@ -434,7 +434,7 @@ private struct LoadingBody: View {
     @State private var visible = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.s(12)) {
             ForEach(0..<6) { i in
                 RoundedRectangle(cornerRadius: 4).fill(Theme.hover)
                     .frame(height: 11)
@@ -442,8 +442,8 @@ private struct LoadingBody: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 26)
-        .padding(.top, 10)
+        .padding(.horizontal, Theme.s(26))
+        .padding(.top, Theme.s(10))
         .opacity(visible ? 1 : 0)
         .task {
             try? await Task.sleep(for: .milliseconds(180))
@@ -458,7 +458,7 @@ private struct AttachmentStrip: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.s(8)) {
                 ForEach(attachments) { a in
                     Button { store.open(a) } label: { AttachmentChip(attachment: a) }
                         .buttonStyle(.plain)
@@ -478,17 +478,17 @@ private struct AttachmentChip: View {
     @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: Theme.s(9)) {
             thumbnail.frame(width: 32, height: 32).clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            VStack(alignment: .leading, spacing: 1) {
-                Text(attachment.filename).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.text).lineLimit(1).truncationMode(.middle)
-                Text(attachment.sizeDescription).font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+            VStack(alignment: .leading, spacing: Theme.s(1)) {
+                Text(attachment.filename).font(Theme.font(size: 12, weight: .semibold)).foregroundStyle(Theme.text).lineLimit(1).truncationMode(.middle)
+                Text(attachment.sizeDescription).font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             }
             .frame(maxWidth: 170, alignment: .leading)
         }
-        .padding(.leading, 6)
-        .padding(.trailing, 12)
-        .padding(.vertical, 6)
+        .padding(.leading, Theme.s(6))
+        .padding(.trailing, Theme.s(12))
+        .padding(.vertical, Theme.s(6))
         .panel(radius: 11, fill: hovering ? Theme.hover : Theme.raised)
         .onHover { hovering = $0 }
     }
@@ -499,7 +499,7 @@ private struct AttachmentChip: View {
         } else {
             ZStack {
                 Theme.accentSoft
-                Image(systemName: attachment.symbol).foregroundStyle(Theme.accentText).font(.system(size: 13))
+                Image(systemName: attachment.symbol).foregroundStyle(Theme.accentText).font(Theme.font(size: 13))
             }
         }
     }

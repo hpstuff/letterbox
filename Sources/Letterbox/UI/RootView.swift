@@ -72,7 +72,7 @@ struct MainShell: View {
         .overlay(alignment: .bottom) {
             if let toast = store.toast {
                 ToastView(toast: toast)
-                    .padding(.bottom, 26)
+                    .padding(.bottom, Theme.s(26))
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }

@@ -5,6 +5,8 @@ struct SettingsView: View {
         TabView {
             AccountSettings()
                 .tabItem { Label("Account", systemImage: "person.crop.circle") }
+            AppearanceSettingsView()
+                .tabItem { Label("Appearance", systemImage: "paintpalette") }
             ClaudeSettings()
                 .tabItem { Label("Claude", systemImage: "sparkle") }
             AliasSettings()
@@ -12,7 +14,7 @@ struct SettingsView: View {
             ReadingSettings()
                 .tabItem { Label("Reading & Writing", systemImage: "text.alignleft") }
         }
-        .frame(width: 560, height: 460)
+        .frame(width: 560, height: 540)
     }
 }
 
@@ -195,5 +197,93 @@ private struct ClaudeSettings: View {
             }
             testing = false
         }
+    }
+}
+
+private struct AppearanceSettingsView: View {
+    @State private var settings = AppearanceSettings.shared
+
+    var body: some View {
+        Form {
+            Section("Colors") {
+                Picker("Appearance", selection: $settings.mode) {
+                    ForEach(AppearanceMode.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .disabled(settings.palette.alwaysDark)
+                .help(settings.palette.alwaysDark ? "\(settings.palette.title) is always dark." : "")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 10)], spacing: 10) {
+                    ForEach(ThemePalette.allCases) { palette in
+                        PaletteSwatch(palette: palette, selected: settings.palette == palette) {
+                            settings.palette = palette
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            Section {
+                Picker("Font", selection: $settings.font) {
+                    ForEach(ThemeFont.allCases) { f in
+                        Text(f.title).font(.system(size: 13, design: f.design)).tag(f)
+                    }
+                }
+                Picker("Text size", selection: $settings.textSize) {
+                    ForEach(ThemeTextSize.allCases) { Text($0.title).tag($0) }
+                }
+                Picker("Spacing", selection: $settings.density) {
+                    ForEach(ThemeDensity.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("Text & Layout")
+            } footer: {
+                HStack {
+                    Spacer()
+                    Button("Restore Defaults") { settings.reset() }
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+/// A small preview card for one color theme.
+private struct PaletteSwatch: View {
+    let palette: ThemePalette
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        let c = palette.colors
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 0) {
+                    c.rail.frame(width: 18)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Capsule().fill(c.text).frame(width: 34, height: 4)
+                        Capsule().fill(c.text3).frame(width: 46, height: 3)
+                        HStack(spacing: 4) {
+                            Circle().fill(c.accent).frame(width: 7, height: 7)
+                            Circle().fill(c.urgent).frame(width: 7, height: 7)
+                            Circle().fill(c.success).frame(width: 7, height: 7)
+                        }
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(c.panel)
+                }
+                .frame(height: 46)
+                .background(c.canvas)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: selected ? 2 : 1)
+                )
+                Text(palette.title).font(.system(size: 11.5, weight: selected ? .semibold : .regular))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(palette.subtitle)
     }
 }

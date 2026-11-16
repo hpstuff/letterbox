@@ -18,39 +18,56 @@ extension Color {
     }
 }
 
-/// A quiet, paper-and-ink palette. Colour is reserved for meaning:
-/// one blue for unread/focus and one muted red for urgency.
+/// A quiet, paper-and-ink palette by default. Colour is reserved for meaning:
+/// one accent for unread/focus and one muted red for urgency.
+/// Values come from the user's chosen appearance (see `AppearanceSettings`).
 enum Theme {
+    private static var settings: AppearanceSettings { .shared }
+    private static var p: Palette { settings.palette.colors }
+    static var isGlass: Bool { settings.palette.isGlass }
+
     // Surfaces
-    static let canvas = Color(light: 0xF6F6F4, dark: 0x0F0F10)
-    static let rail = Color(light: 0xF1F1EE, dark: 0x131314)
-    static let panel = Color(light: 0xFFFFFF, dark: 0x161617)
-    static let raised = Color(light: 0xFFFFFF, dark: 0x1C1C1E)
-    static let sunken = Color(light: 0xF3F3F1, dark: 0x121213)
+    static var canvas: Color { p.canvas }
+    static var rail: Color { p.rail }
+    static var panel: Color { p.panel }
+    static var raised: Color { p.raised }
+    static var sunken: Color { p.sunken }
     static let hover = Color(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.035, darkAlpha: 0.045)
     static let hairline = Color(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.075, darkAlpha: 0.08)
     static let strongLine = Color(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.13, darkAlpha: 0.14)
 
     // Ink
-    static let text = Color(light: 0x141414, dark: 0xECECEC)
-    static let text2 = Color(light: 0x5C5C5C, dark: 0xA2A2A2)
-    static let text3 = Color(light: 0x949494, dark: 0x6A6A6A)
-    static let ink = text
-    static let onInk = Color(light: 0xFFFFFF, dark: 0x141414)
+    static var text: Color { p.text }
+    static var text2: Color { p.text2 }
+    static var text3: Color { p.text3 }
+    static var ink: Color { p.ink }
+    static var onInk: Color { p.onInk }
 
     // Accents (used sparingly)
-    static let accent = Color(light: 0x2F5BD3, dark: 0x6E93F2)
+    static var accent: Color { p.accent }
     static let accentSoft = Color(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.055, darkAlpha: 0.075)
-    static let accentText = text
-    static let brand = LinearGradient(colors: [ink, ink], startPoint: .top, endPoint: .bottom)
-    static let aurora = LinearGradient(colors: [text2, text2], startPoint: .top, endPoint: .bottom)
+    static var accentText: Color { text }
+    static var brand: LinearGradient { LinearGradient(colors: [ink, ink], startPoint: .top, endPoint: .bottom) }
+    static var aurora: LinearGradient { LinearGradient(colors: [text2, text2], startPoint: .top, endPoint: .bottom) }
     static let auroraSoft = LinearGradient(colors: [Color.clear, Color.clear], startPoint: .top, endPoint: .bottom)
 
     // Semantic
-    static let urgent = Color(light: 0xB83A3A, dark: 0xE06A66)
-    static let high = text
-    static let normal = text2
-    static let success = Color(light: 0x2E7550, dark: 0x6BBF8E)
+    static var urgent: Color { p.urgent }
+    static var high: Color { text }
+    static var normal: Color { text2 }
+    static var success: Color { p.success }
+
+    // Type & spacing
+
+    /// A UI font at `size`, scaled by the user's text size and drawn in their chosen font style.
+    static func font(size: CGFloat, weight: Font.Weight = .regular, design: Font.Design? = nil) -> Font {
+        .system(size: size * settings.textSize.scale, weight: weight, design: design ?? settings.font.design)
+    }
+
+    /// Spacing scaled by the user's density setting, rounded to half points.
+    static func s(_ value: CGFloat) -> CGFloat {
+        (value * settings.density.scale * 2).rounded() / 2
+    }
 
     static func priorityColor(_ p: Int) -> Color {
         switch p {
@@ -70,15 +87,15 @@ enum Theme {
     }
 
     static func display(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font {
-        .system(size: size, weight: weight)
+        font(size: size, weight: weight)
     }
 
     /// Editorial serif for headlines.
     static func serif(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font {
-        .system(size: size, weight: weight, design: .serif)
+        font(size: size, weight: weight, design: settings.font.headlineDesign)
     }
 
-    static let micro = Font.system(size: 10.5, weight: .semibold)
+    static var micro: Font { font(size: 10.5, weight: .semibold) }
 }
 
 // MARK: - Surfaces & controls
@@ -121,7 +138,7 @@ struct IconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .regular))
+                .font(Theme.font(size: 13, weight: .regular))
                 .foregroundStyle(active ? Theme.text : tint)
                 .frame(width: size, height: size)
                 .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(active ? Theme.accentSoft : (hovering ? Theme.hover : .clear)))
@@ -131,6 +148,17 @@ struct IconButton: View {
         .help(help)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+private struct GlassPill: ViewModifier {
+    let enabled: Bool
+    func body(content: Content) -> some View {
+        if enabled {
+            content.glassSurface(Capsule(), fill: .clear, interactive: true)
+        } else {
+            content
+        }
     }
 }
 
@@ -145,24 +173,30 @@ struct PillButton: View {
     @State private var hovering = false
     @Environment(\.isEnabled) private var enabled
 
+    /// Secondary buttons become glass capsules in the Liquid Glass theme.
+    private var glassy: Bool { Theme.isGlass && (style == .secondary || style == .ai) }
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                if let symbol { Image(systemName: symbol).font(.system(size: compact ? 10.5 : 11.5, weight: .medium)) }
-                Text(title).font(.system(size: compact ? 12 : 12.5, weight: .medium))
+            HStack(spacing: Theme.s(6)) {
+                if let symbol { Image(systemName: symbol).font(Theme.font(size: compact ? 10.5 : 11.5, weight: .medium)) }
+                Text(title).font(Theme.font(size: compact ? 12 : 12.5, weight: .medium))
             }
             .padding(.horizontal, compact ? 10 : 13)
             .frame(maxWidth: expand ? .infinity : nil)
             .frame(height: compact ? 26 : 30)
             .foregroundStyle(style == .primary ? Theme.onInk : Theme.text)
-            .background(
-                RoundedRectangle(cornerRadius: compact ? 7 : 8, style: .continuous)
-                    .fill(style == .primary ? Theme.ink.opacity(hovering ? 0.86 : 1) : (hovering ? Theme.hover : (style == .ghost ? .clear : Theme.raised)))
-            )
+            .background {
+                if !glassy {
+                    RoundedRectangle(cornerRadius: compact ? 7 : 8, style: .continuous)
+                        .fill(style == .primary ? Theme.ink.opacity(hovering ? 0.86 : 1) : (hovering ? Theme.hover : (style == .ghost ? .clear : Theme.raised)))
+                }
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: compact ? 7 : 8, style: .continuous)
-                    .strokeBorder(style == .primary || style == .ghost ? .clear : Theme.strongLine, lineWidth: 1)
+                    .strokeBorder(style == .primary || style == .ghost || glassy ? .clear : Theme.strongLine, lineWidth: 1)
             )
+            .modifier(GlassPill(enabled: glassy))
             .opacity(enabled ? 1 : 0.4)
             .contentShape(Rectangle())
         }
@@ -177,12 +211,12 @@ struct TagChip: View {
     var color: Color = Theme.text2
 
     var body: some View {
-        HStack(spacing: 4) {
-            if let symbol { Image(systemName: symbol).font(.system(size: 8.5, weight: .semibold)) }
+        HStack(spacing: Theme.s(4)) {
+            if let symbol { Image(systemName: symbol).font(Theme.font(size: 8.5, weight: .semibold)) }
             Text(text).lineLimit(1).truncationMode(.middle)
         }
-        .font(.system(size: 10.5, weight: .medium))
-        .padding(.horizontal, 6)
+        .font(Theme.font(size: 10.5, weight: .medium))
+        .padding(.horizontal, Theme.s(6))
         .frame(height: 18)
         .foregroundStyle(color)
         .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Theme.sunken))
@@ -195,7 +229,7 @@ struct SparkleIcon: View {
     var size: CGFloat = 12
     var body: some View {
         Image(systemName: "sparkle")
-            .font(.system(size: size * 0.9, weight: .medium))
+            .font(Theme.font(size: size * 0.9, weight: .medium))
             .foregroundStyle(Theme.text3)
     }
 }
@@ -233,7 +267,7 @@ struct AvatarView: View {
             .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
             .overlay(
                 Text(Self.initials(name: name, email: email))
-                    .font(.system(size: size * 0.36, weight: .medium))
+                    .font(Theme.font(size: size * 0.36, weight: .medium))
                     .foregroundStyle(Theme.text2)
             )
             .overlay(alignment: .topTrailing) {
@@ -260,16 +294,16 @@ struct ToastView: View {
     let toast: Toast
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: Theme.s(9)) {
             Image(systemName: toast.symbol)
-                .font(.system(size: 12, weight: .medium))
+                .font(Theme.font(size: 12, weight: .medium))
                 .foregroundStyle(Theme.onInk.opacity(0.75))
             Text(toast.message)
-                .font(.system(size: 12.5, weight: .medium))
+                .font(Theme.font(size: 12.5, weight: .medium))
                 .foregroundStyle(Theme.onInk)
                 .lineLimit(2)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Theme.s(16))
         .frame(minHeight: 36)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.ink))
         .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
@@ -283,11 +317,11 @@ struct SearchField: View {
     var focus: FocusState<Bool>.Binding
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(Theme.text3)
+        HStack(spacing: Theme.s(8)) {
+            Image(systemName: "magnifyingglass").font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
             TextField(prompt, text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .font(Theme.font(size: 13))
                 .focused(focus)
             if !text.isEmpty {
                 Button { text = "" } label: {
@@ -295,10 +329,10 @@ struct SearchField: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                Text("⌘F").font(.system(size: 10.5)).foregroundStyle(Theme.text3)
+                Text("⌘F").font(Theme.font(size: 10.5)).foregroundStyle(Theme.text3)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, Theme.s(10))
         .frame(height: 30)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.sunken))
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(focus.wrappedValue ? Theme.strongLine : Theme.hairline, lineWidth: 1))
@@ -312,10 +346,10 @@ struct SectionHeader: View {
     var subtitle: String?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.text)
-            if count > 0 { Text("\(count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.text3) }
-            if let subtitle { Text(subtitle).font(.system(size: 12)).foregroundStyle(Theme.text3) }
+        HStack(alignment: .firstTextBaseline, spacing: Theme.s(8)) {
+            Text(title).font(Theme.font(size: 13, weight: .semibold)).foregroundStyle(Theme.text)
+            if count > 0 { Text("\(count)").font(Theme.font(size: 12).monospacedDigit()).foregroundStyle(Theme.text3) }
+            if let subtitle { Text(subtitle).font(Theme.font(size: 12)).foregroundStyle(Theme.text3) }
             Spacer()
         }
     }

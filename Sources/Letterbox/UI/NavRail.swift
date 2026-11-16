@@ -9,17 +9,17 @@ struct NavRail: View {
         VStack(alignment: .leading, spacing: 0) {
             Color.clear.frame(height: 38) // traffic lights
             brand
-                .padding(.horizontal, 6)
-                .padding(.bottom, 16)
-            HStack(spacing: 8) {
+                .padding(.horizontal, Theme.s(6))
+                .padding(.bottom, Theme.s(16))
+            HStack(spacing: Theme.s(8)) {
                 PillButton(title: "New message", symbol: "square.and.pencil", style: .primary, expand: true) { store.newMessage() }
                 IconButton(symbol: "command", help: "Search or ask Claude (⌘K)", size: 30) { store.showPalette = true }
                     .panel(radius: 9, fill: Theme.raised)
             }
-            .padding(.bottom, 18)
+            .padding(.bottom, Theme.s(18))
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Theme.s(2)) {
                     NavItem(title: "Dashboard", symbol: "square.grid.2x2", item: .dashboard, badge: store.dashboard.needsReply.count)
                     sectionLabel("Mailboxes")
                     ForEach(store.mailboxFolders) { f in
@@ -32,11 +32,11 @@ struct NavRail: View {
                         sectionLabel("Addresses")
                         Spacer()
                         Button { addingAlias = true } label: {
-                            Image(systemName: "plus").font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.text3)
+                            Image(systemName: "plus").font(Theme.font(size: 10, weight: .bold)).foregroundStyle(Theme.text3)
                                 .frame(width: 20, height: 20)
                         }
                         .buttonStyle(.plain)
-                        .padding(.top, 14)
+                        .padding(.top, Theme.s(14))
                         .help("Add an alias")
                         .popover(isPresented: $addingAlias, arrowEdge: .trailing) { aliasPopover }
                     }
@@ -59,35 +59,37 @@ struct NavRail: View {
                         ForEach(store.customFolders) { folderItem($0) }
                     }
                 }
-                .padding(.bottom, 12)
+                .padding(.bottom, Theme.s(12))
             }
 
             ClaudeStatusCard()
-                .padding(.bottom, 10)
+                .padding(.bottom, Theme.s(10))
             AccountRow()
-                .padding(.bottom, 12)
+                .padding(.bottom, Theme.s(12))
         }
-        .padding(.horizontal, 12)
-        .background(Theme.rail)
+        .padding(.horizontal, Theme.s(12))
+        .background {
+            if Theme.isGlass { GlassSidebarBackground().ignoresSafeArea() } else { Theme.rail }
+        }
     }
 
     private var brand: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.s(10)) {
             ZStack {
                 RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Theme.ink)
-                Image(systemName: "envelope").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.onInk)
+                Image(systemName: "envelope").font(Theme.font(size: 11, weight: .semibold)).foregroundStyle(Theme.onInk)
             }
             .frame(width: 26, height: 26)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Letterbox").font(Theme.serif(16, .semibold)).foregroundStyle(Theme.text)
-                Text("with Claude").font(.system(size: 10.5, weight: .medium)).foregroundStyle(Theme.text3)
+                Text("with Claude").font(Theme.font(size: 10.5, weight: .medium)).foregroundStyle(Theme.text3)
             }
             Spacer()
         }
     }
 
     private func sectionLabel(_ s: String) -> some View {
-        Text(s).microLabel().padding(.leading, 10).padding(.top, 16).padding(.bottom, 5)
+        Text(s).microLabel().padding(.leading, Theme.s(10)).padding(.top, Theme.s(16)).padding(.bottom, Theme.s(5))
     }
 
     private func folderItem(_ f: Folder) -> some View {
@@ -104,7 +106,7 @@ struct NavRail: View {
     }
 
     private var aliasPopover: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.s(10)) {
             Text("Add an alias").font(.headline)
             Text("Letterbox detects aliases from your mail automatically. Add one here if it hasn’t received anything yet.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -115,7 +117,7 @@ struct NavRail: View {
                 Button("Add", action: commitAlias).keyboardShortcut(.defaultAction).disabled(!newAlias.contains("@"))
             }
         }
-        .padding(16)
+        .padding(Theme.s(16))
         .frame(width: 280)
     }
 
@@ -145,7 +147,7 @@ private struct NavItem: View {
             store.searchText = ""
             store.sidebarSelection = item
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.s(10)) {
                 Group {
                     if ai {
                         Image(systemName: symbol).foregroundStyle(Theme.aurora)
@@ -154,17 +156,17 @@ private struct NavItem: View {
                             .foregroundStyle(selected ? Theme.accentText : Theme.text2)
                     }
                 }
-                .font(.system(size: 13, weight: .medium))
+                .font(Theme.font(size: 13, weight: .medium))
                 .frame(width: 18)
                 Text(title)
-                    .font(.system(size: mono ? 12.5 : 13, weight: selected ? .semibold : .medium))
+                    .font(Theme.font(size: mono ? 12.5 : 13, weight: selected ? .semibold : .medium))
                     .foregroundStyle(selected ? Theme.text : Theme.text2)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 4)
                 if badge > 0 {
                     Text("\(badge)")
-                        .font(.system(size: 10.5, weight: .bold).monospacedDigit())
+                        .font(Theme.font(size: 10.5, weight: .bold).monospacedDigit())
                         .foregroundStyle(quietBadge ? Theme.text3 : Theme.text)
                         .padding(.horizontal, quietBadge ? 2 : 7)
                         .frame(minWidth: 20, minHeight: 18)
@@ -175,7 +177,7 @@ private struct NavItem: View {
                         }
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, Theme.s(10))
             .frame(height: 32)
             .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(selected ? Theme.accentSoft : (hovering ? Theme.hover : .clear)))
             .contentShape(Rectangle())
@@ -189,21 +191,21 @@ private struct ClaudeStatusCard: View {
     @Environment(MailStore.self) private var store
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 7) {
+        VStack(alignment: .leading, spacing: Theme.s(7)) {
+            HStack(spacing: Theme.s(7)) {
                 SparkleIcon(size: 11)
-                Text("Claude").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.text)
+                Text("Claude").font(Theme.font(size: 12, weight: .bold)).foregroundStyle(Theme.text)
                 Spacer()
                 Circle().fill(dotColor).frame(width: 6, height: 6)
             }
             Text(statusText)
-                .font(.system(size: 11))
+                .font(Theme.font(size: 11))
                 .foregroundStyle(Theme.text2)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             if store.aiStatus.isWorking { ThinkingBar() }
         }
-        .padding(11)
+        .padding(Theme.s(11))
         .aurora(radius: 11, animated: store.aiStatus.isWorking)
         .onTapGesture {
             if store.aiStatus == .missing || store.aiStatus == .off {
@@ -237,21 +239,21 @@ private struct AccountRow: View {
     @Environment(MailStore.self) private var store
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.s(10)) {
             AvatarView(name: store.account?.displayName ?? "", email: store.account?.email ?? "", size: 30)
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: Theme.s(1)) {
                 Text(store.account?.displayName.isEmpty == false ? store.account!.displayName : (store.account?.email ?? ""))
-                    .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                    .font(Theme.font(size: 12.5, weight: .semibold)).foregroundStyle(Theme.text).lineLimit(1)
                 syncLine
             }
             Spacer(minLength: 0)
             SettingsLink {
-                Image(systemName: "gearshape").font(.system(size: 13)).foregroundStyle(Theme.text3).frame(width: 26, height: 26)
+                Image(systemName: "gearshape").font(Theme.font(size: 13)).foregroundStyle(Theme.text3).frame(width: 26, height: 26)
             }
             .buttonStyle(.plain)
             .help("Settings (⌘,)")
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, Theme.s(4))
     }
 
     @ViewBuilder private var syncLine: some View {
@@ -268,7 +270,7 @@ private struct AccountRow: View {
                 Text("Connecting…")
             }
         }
-        .font(.system(size: 10.5))
+        .font(Theme.font(size: 10.5))
         .foregroundStyle(Theme.text3)
         .lineLimit(1)
     }
