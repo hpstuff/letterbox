@@ -119,14 +119,32 @@ final class Database: @unchecked Sendable {
     let reader: SQLiteConnection
     let url: URL
 
-    static func defaultURL() -> URL {
+    private static var baseDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Letterbox", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        return base.appendingPathComponent("mail.sqlite")
+        return base
     }
 
-    init(url: URL = Database.defaultURL()) {
+    /// Each account has its own cache file. The legacy account keeps the original `mail.sqlite`.
+    static func url(forAccount id: String) -> URL {
+        baseDirectory.appendingPathComponent(id == Account.legacyID ? "mail.sqlite" : "mail-\(id).sqlite")
+    }
+
+    /// An empty, throwaway cache used while no account is signed in.
+    static func scratchURL() -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("letterbox-empty-\(UUID().uuidString).sqlite")
+    }
+
+    /// Deletes an account's cache file and its WAL side files.
+    static func removeFiles(forAccount id: String) {
+        let url = url(forAccount: id)
+        for suffix in ["", "-wal", "-shm"] {
+            try? FileManager.default.removeItem(atPath: url.path + suffix)
+        }
+    }
+
+    init(url: URL) {
         self.url = url
         writer = SQLiteConnection(path: url.path, readOnly: false)
         writer.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY;")

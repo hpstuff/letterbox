@@ -65,8 +65,8 @@ struct MessageListPane: View {
                             insight: store.insights[m.id],
                             selected: store.selection.contains(m.id),
                             alias: store.receivingAlias(for: m),
-                            folderName: store.currentFolder == nil || !store.searchText.isEmpty ? store.folders.first { $0.path == m.folder }?.displayName : nil,
-                            outgoing: store.currentFolder.map { $0.role == .sent || $0.role == .drafts } ?? false
+                            folderName: store.showsFolderTags ? store.folder(of: m)?.displayName : nil,
+                            outgoing: store.showingOutgoing
                         )
                         .id(m.id)
                         .onTapGesture { click(m) }
@@ -314,8 +314,9 @@ struct MessageContextMenu: View {
         Divider()
         Button("Archive") { store.archive(ids) }
         Menu("Move To") {
-            ForEach(store.folders) { f in Button(f.displayName) { store.move(ids, to: f.path) } }
+            ForEach(store.moveTargets(for: ids)) { f in Button(f.displayName) { store.move(ids, to: f) } }
         }
+        .disabled(store.moveTargets(for: ids).isEmpty)
         Button("Junk / Not Junk") { store.markJunk(ids) }
         Divider()
         Button("Move to Trash", role: .destructive) { store.trash(ids) }

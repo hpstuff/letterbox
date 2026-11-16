@@ -7,7 +7,7 @@ extension MailRepository {
         SELECT i.folder, i.uid, priority, category, summary, reason, action, due, needs_reply, done
         FROM insights i JOIN messages m ON m.folder = i.folder AND m.uid = i.uid
         """) { r in
-            out[MessageSummary.makeID(r.text(0), UInt32(r.int(1)))] = Insight(
+            out[MessageSummary.folderID(accountID, "\(r.text(0))\u{1}\(r.int(1))")] = Insight(
                 priority: r.int(2), category: r.text(3), summary: r.text(4), reason: r.text(5),
                 action: r.text(6), due: r.text(7), needsReply: r.bool(8), done: r.bool(9))
         }
@@ -39,7 +39,7 @@ extension MailRepository {
 
     func recentMessages(folder: String, since: Date, limit: Int) -> [MessageSummary] {
         db.reader.query("SELECT \(Self.messageColumns) FROM messages WHERE folder = ? AND date >= ? ORDER BY date DESC LIMIT ?",
-                        [.text(folder), .double(since.timeIntervalSince1970), .of(limit)], Self.message)
+                        [.text(folder), .double(since.timeIntervalSince1970), .of(limit)], row)
     }
 }
 
@@ -80,6 +80,6 @@ extension MailRepository {
         guard !folders.isEmpty else { return [] }
         let placeholders = folders.map { _ in "?" }.joined(separator: ",")
         return db.reader.query("SELECT \(Self.messageColumns) FROM messages WHERE folder IN (\(placeholders)) AND date >= ? ORDER BY date DESC LIMIT ?",
-                               folders.map { .text($0) } + [.double(since.timeIntervalSince1970), .of(limit)], Self.message)
+                               folders.map { .text($0) } + [.double(since.timeIntervalSince1970), .of(limit)], row)
     }
 }

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct OnboardingView: View {
     @Environment(MailStore.self) private var store
+    /// True when shown as a sheet to add another account, rather than as the first-run screen.
+    var addingAccount = false
     @State private var email = ""
     @State private var password = ""
     @State private var name = NSFullUserName()
@@ -54,10 +56,10 @@ struct OnboardingView: View {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .frame(width: 64, height: 64)
-            Text("Welcome to Letterbox")
+            Text(addingAccount ? "Add an account" : "Welcome to Letterbox")
                 .font(Theme.serif(30, .regular))
                 .foregroundStyle(Theme.text)
-            Text("A quiet, fast mail client for any IMAP account — organized by Claude.")
+            Text(addingAccount ? "Its mail will show up together with your other accounts." : "A quiet, fast mail client for any IMAP account — organized by Claude.")
                 .font(Theme.font(size: 13.5))
                 .foregroundStyle(Theme.text2)
         }
@@ -151,10 +153,15 @@ struct OnboardingView: View {
                         .foregroundStyle(Theme.text2)
                 }
                 Spacer()
+                if addingAccount {
+                    Button("Cancel") { store.addingAccount = false }
+                        .keyboardShortcut(.cancelAction)
+                        .disabled(working)
+                }
                 Button(action: submit) {
                     HStack(spacing: Theme.s(8)) {
                         if working { ProgressView().controlSize(.small) }
-                        Text(working ? "Connecting…" : "Sign in")
+                        Text(working ? "Connecting…" : (addingAccount ? "Add account" : "Sign in"))
                     }
                     .font(Theme.font(size: 13, weight: .medium))
                     .foregroundStyle(Theme.onInk)

@@ -1,18 +1,38 @@
 import Foundation
 
 struct MessageQuery {
-    var item: SidebarItem
+    enum Scope {
+        case all
+        case folder(String)
+        case role(FolderRole)
+        case flagged
+        case address(String)
+    }
+
+    var scope: Scope = .all
     var search: String = ""
     var unreadOnly = false
-    var excludedFolders: [String] = []
+    /// Folder roles left out of searches and cross-folder views (e.g. Trash and Junk).
+    var excludedRoles: [FolderRole] = []
     var limit = 2500
 }
 
-/// Typed access to the cache. Reads go through the reader handle, writes through the writer.
+/// Typed access to one account's cache. Reads go through the reader handle, writes through the writer.
 final class MailRepository: @unchecked Sendable {
     let db: Database
+    /// Stamped on every message and folder read from this cache.
+    let accountID: String
 
-    init(db: Database) { self.db = db }
+    init(db: Database, accountID: String = "") {
+        self.db = db
+        self.accountID = accountID
+    }
+
+    func row(_ r: SQLRow) -> MessageSummary {
+        var m = Self.message(r)
+        m.account = accountID
+        return m
+    }
 
     static let messageColumns = """
     folder, uid, message_id, subject, from_name, from_addr, to_list, cc_list, reply_to, delivered_to,
@@ -35,7 +55,7 @@ final class MailRepository: @unchecked Sendable {
     func folders() -> [Folder] {
         db.reader.query("SELECT path, name, delimiter, role, total, unread FROM folders WHERE selectable = 1") { r in
             Folder(path: r.text(0), name: r.text(1), delimiter: r.text(2), role: FolderRole(rawValue: r.text(3)) ?? .custom,
-                   total: r.int(4), unread: r.int(5))
+                   total: r.int(4), unread: r.int(5), account: accountID)
         }
         .sorted { ($0.role.order, $0.displayName.lowercased()) < ($1.role.order, $1.displayName.lowercased()) }
     }
@@ -90,21 +110,24 @@ final class MailRepository: @unchecked Sendable {
         var args: [SQLValue] = []
         let terms = q.search.split(separator: " ").map { "%\($0)%" }
 
+        var singleFolder = false
         if terms.isEmpty {
-            switch q.item {
-            case .dashboard:
+            switch q.scope {
+            case .all:
                 break
             case .folder(let path):
-                clauses.append("folder = ?"); args.append(.text(path))
+                clauses.append("folder = ?"); args.append(.text(path)); singleFolder = true
+            case .role(let role):
+                clauses.append("folder IN (SELECT path FROM folders WHERE role = ?)"); args.append(.text(role.rawValue)); singleFolder = true
             case .flagged:
                 clauses.append("flagged = 1")
             case .address(let email):
                 clauses.append("recipients LIKE ?"); args.append(.text("% \(email.lowercased()) %"))
             }
         }
-        if case .folder = q.item, terms.isEmpty {} else if !q.excludedFolders.isEmpty {
-            clauses.append("folder NOT IN (\(q.excludedFolders.map { _ in "?" }.joined(separator: ",")))")
-            args += q.excludedFolders.map { .text($0) }
+        if !singleFolder && !q.excludedRoles.isEmpty {
+            clauses.append("folder NOT IN (SELECT path FROM folders WHERE role IN (\(q.excludedRoles.map { _ in "?" }.joined(separator: ","))))")
+            args += q.excludedRoles.map { .text($0.rawValue) }
         }
         for t in terms {
             clauses.append("(subject LIKE ? OR from_name LIKE ? OR from_addr LIKE ? OR snippet LIKE ? OR recipients LIKE ?)")
@@ -112,11 +135,11 @@ final class MailRepository: @unchecked Sendable {
         }
         if q.unreadOnly { clauses.append("seen = 0") }
         let whereSQL = clauses.isEmpty ? "" : "WHERE " + clauses.joined(separator: " AND ")
-        return db.reader.query("SELECT \(Self.messageColumns) FROM messages \(whereSQL) ORDER BY date DESC LIMIT \(q.limit)", args, Self.message)
+        return db.reader.query("SELECT \(Self.messageColumns) FROM messages \(whereSQL) ORDER BY date DESC LIMIT \(q.limit)", args, row)
     }
 
     func message(folder: String, uid: UInt32) -> MessageSummary? {
-        db.reader.query("SELECT \(Self.messageColumns) FROM messages WHERE folder = ? AND uid = ?", [.text(folder), .of(uid)], Self.message).first
+        db.reader.query("SELECT \(Self.messageColumns) FROM messages WHERE folder = ? AND uid = ?", [.text(folder), .of(uid)], row).first
     }
 
     func upsert(_ items: [FetchedSummary], folder: String) {

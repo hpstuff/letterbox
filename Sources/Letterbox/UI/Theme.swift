@@ -69,6 +69,17 @@ enum Theme {
         (value * settings.density.scale * 2).rounded() / 2
     }
 
+    /// Ring colors that tell accounts apart, in the order accounts were added.
+    static let accountColors: [Color] = [
+        Color(light: 0x2E9E5B, dark: 0x5BC88A),
+        Color(light: 0xD23F6E, dark: 0xF07399),
+        Color(light: 0x2F5BD3, dark: 0x6E93F2),
+        Color(light: 0xD9822B, dark: 0xF0A55B),
+        Color(light: 0x8A4FD1, dark: 0xB48AF0),
+        Color(light: 0x1F9AA6, dark: 0x5CC6CF),
+    ]
+    static func accountColor(_ index: Int) -> Color { accountColors[index % accountColors.count] }
+
     static func priorityColor(_ p: Int) -> Color {
         switch p {
         case 3: return urgent
@@ -287,6 +298,28 @@ struct AvatarView: View {
         let words = source.split { !$0.isLetter && !$0.isNumber }.prefix(2)
         let letters = words.compactMap(\.first).map { String($0).uppercased() }.joined()
         return letters.isEmpty ? "?" : letters
+    }
+}
+
+/// An account's initials inside a ring of its color.
+struct AccountMark: View {
+    let name: String
+    let email: String
+    let color: Color
+    var size: CGFloat = 18
+
+    var body: some View {
+        Circle()
+            .fill(Theme.sunken)
+            .overlay(
+                Text(AvatarView.initials(name: name, email: email))
+                    .font(Theme.font(size: size * 0.4, weight: .semibold))
+                    .foregroundStyle(Theme.text2)
+            )
+            .padding(2)
+            .overlay(Circle().strokeBorder(color, lineWidth: 1.6))
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
 }
 

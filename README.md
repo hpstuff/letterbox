@@ -39,6 +39,7 @@ Letterbox is a small, dependency-free SwiftUI app that keeps your mail in a loca
 
 **A fast, focused mail client**
 - Works with any IMAP/SMTP provider, with presets for the popular ones (SSL/TLS and STARTTLS).
+- Multiple accounts in one combined view — one Dashboard, Inbox, Sent, Archive and search across all of them, with each account's addresses and folders listed in the sidebar. Replies go out from the account that received the message.
 - Instant launch from a local cache, background sync, prefetching of recent messages.
 - Alias detection — mail sent to your aliases is labeled, and replies go out from the right address.
 - Keyboard-first: `↑↓`/`J K` navigate, `E` archive, `⌫` trash, `R` reply, `D` draft with Claude, `⌘K` command palette.
@@ -139,7 +140,7 @@ Letterbox finds `claude` in `~/.local/bin`, `~/.claude/local`, Homebrew, or your
 ## How it works
 
 - **Networking** — a small IMAP and SMTP implementation on top of Foundation streams with SSL/TLS and STARTTLS, two connections per account so opening a message never waits behind a sync.
-- **Storage** — headers, bodies, conversation insights and aliases live in SQLite (WAL mode) under `~/Library/Application Support/Letterbox`. The UI reads only from the cache.
+- **Storage** — headers, bodies, conversation insights and aliases live in SQLite (WAL mode) under `~/Library/Application Support/Letterbox`, one database per account. The UI reads only from the cache.
 - **Threading** — conversations are built from `Message-ID`, `In-Reply-To` and `References`, with a careful subject fallback, across Inbox, Sent and Archive.
 - **AI pipeline** — new or changed conversations are triaged in small batches into a status, priority, summary, next action, due date and timeline. The assistant does a two-step retrieval (pick relevant threads from an index, then read them in full) before answering.
 
@@ -152,7 +153,6 @@ Letterbox has no backend and no analytics. Mail is fetched directly from your pr
 ## Roadmap
 
 - OAuth sign-in (Gmail, Microsoft 365, Outlook.com)
-- Multiple accounts and a unified inbox
 - IMAP IDLE push for instant delivery
 - Rich-text composing and saved drafts on the server
 - Notarized builds and auto-update
