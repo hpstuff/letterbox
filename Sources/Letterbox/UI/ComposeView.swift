@@ -140,7 +140,7 @@ struct ComposeView: View {
                 .foregroundStyle(Theme.text3)
                 .padding(.horizontal, Theme.s(10))
                 .frame(height: 22)
-                .background(Capsule().fill(Theme.sunken))
+                .glassSurface(Capsule(), fill: Theme.sunken, interactive: true)
             }
             .buttonStyle(.plain)
             if draft.showQuote {
@@ -444,10 +444,8 @@ private struct AIComposeBar: View {
                                 .foregroundStyle(on ? Theme.onInk : Theme.text2)
                                 .padding(.horizontal, Theme.s(10))
                                 .frame(height: 24)
-                                .background {
-                                    if on { Capsule().fill(Theme.ink) } else { Capsule().fill(Theme.raised) }
-                                }
-                                .overlay(Capsule().strokeBorder(on ? .clear : Theme.hairline))
+                                .glassSurface(Capsule(), fill: on ? Theme.ink : Theme.raised, tint: on ? Theme.accent : nil, interactive: true)
+                                .overlay(Capsule().strokeBorder(on || Theme.isGlass ? .clear : Theme.hairline))
                         }
                         .buttonStyle(.plain)
                     }

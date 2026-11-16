@@ -143,33 +143,49 @@ struct IconButton: View {
     var tint: Color = Theme.text2
     var size: CGFloat = 30
     var active = false
+    /// Spins the icon (not the button around it) while work is running.
+    var spinning = false
     let action: () -> Void
-    @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol)
-                .font(Theme.font(size: 13, weight: .regular))
-                .foregroundStyle(active ? Theme.text : tint)
-                .frame(width: size, height: size)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(active ? Theme.accentSoft : (hovering ? Theme.hover : .clear)))
-                .contentShape(Rectangle())
+            IconLabel(symbol: symbol, tint: tint, size: size, active: active, spinning: spinning)
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled(Theme.isGlass)
         .help(help)
-        .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }
 
-private struct GlassPill: ViewModifier {
-    let enabled: Bool
-    func body(content: Content) -> some View {
-        if enabled {
-            content.glassSurface(Capsule(), fill: .clear, interactive: true)
-        } else {
-            content
+/// The look of an icon button, for use inside `Button`, `SettingsLink` and similar.
+/// In the Liquid Glass theme it is a glass circle, or a bare icon inside a `GlassGroup`.
+struct IconLabel: View {
+    let symbol: String
+    var tint: Color = Theme.text2
+    var size: CGFloat = 30
+    var active = false
+    var spinning = false
+    @Environment(\.inGlassGroup) private var grouped
+    @State private var hovering = false
+
+    var body: some View {
+        let icon = Image(systemName: symbol)
+            .font(Theme.font(size: 13, weight: .regular))
+            .foregroundStyle(active ? Theme.text : tint)
+            .symbolEffect(.rotate, options: .repeat(.continuous), isActive: spinning)
+            .frame(width: size, height: size)
+        Group {
+            if Theme.isGlass && !grouped {
+                icon.glassSurface(Circle(), fill: .clear, tint: active ? Theme.accent.opacity(0.35) : nil, interactive: true)
+            } else if Theme.isGlass {
+                icon.background(Circle().fill(active ? Theme.accentSoft : (hovering ? Theme.hover : .clear)))
+            } else {
+                icon.background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(active ? Theme.accentSoft : (hovering ? Theme.hover : .clear)))
+            }
         }
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }
 
@@ -183,13 +199,15 @@ struct PillButton: View {
     let action: () -> Void
     @State private var hovering = false
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.inGlassGroup) private var grouped
 
-    /// Secondary buttons become glass capsules in the Liquid Glass theme.
-    private var glassy: Bool { Theme.isGlass && (style == .secondary || style == .ai) }
+    /// In the Liquid Glass theme every pill is a glass capsule; primary ones are tinted with the accent.
+    /// Inside a `GlassGroup` the group draws the glass instead.
+    private var glassy: Bool { Theme.isGlass && !grouped }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: Theme.s(6)) {
+            let label = HStack(spacing: Theme.s(6)) {
                 if let symbol { Image(systemName: symbol).font(Theme.font(size: compact ? 10.5 : 11.5, weight: .medium)) }
                 Text(title).font(Theme.font(size: compact ? 12 : 12.5, weight: .medium))
             }
@@ -197,21 +215,29 @@ struct PillButton: View {
             .frame(maxWidth: expand ? .infinity : nil)
             .frame(height: compact ? 26 : 30)
             .foregroundStyle(style == .primary ? Theme.onInk : Theme.text)
-            .background {
-                if !glassy {
-                    RoundedRectangle(cornerRadius: compact ? 7 : 8, style: .continuous)
-                        .fill(style == .primary ? Theme.ink.opacity(hovering ? 0.86 : 1) : (hovering ? Theme.hover : (style == .ghost ? .clear : Theme.raised)))
+            Group {
+                if glassy {
+                    label.glassSurface(Capsule(), fill: .clear, tint: style == .primary ? Theme.accent : nil, interactive: true)
+                } else if Theme.isGlass {
+                    label.background(Capsule().fill(hovering ? Theme.hover : .clear))
+                } else {
+                    label
+                        .background(
+                            RoundedRectangle(cornerRadius: compact ? 7 : 8, style: .continuous)
+                                .fill(style == .primary ? Theme.ink.opacity(hovering ? 0.86 : 1) : (hovering ? Theme.hover : (style == .ghost ? .clear : Theme.raised)))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: compact ? 7 : 8, style: .continuous)
+                                .strokeBorder(style == .primary || style == .ghost ? .clear : Theme.strongLine, lineWidth: 1)
+                        )
                 }
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: compact ? 7 : 8, style: .continuous)
-                    .strokeBorder(style == .primary || style == .ghost || glassy ? .clear : Theme.strongLine, lineWidth: 1)
-            )
-            .modifier(GlassPill(enabled: glassy))
             .opacity(enabled ? 1 : 0.4)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // The square focus ring does not fit a glass capsule; the glass shows the press itself.
+        .focusEffectDisabled(Theme.isGlass)
         .onHover { hovering = $0 }
     }
 }

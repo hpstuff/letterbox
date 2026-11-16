@@ -256,14 +256,15 @@ enum ThemePalette: String, CaseIterable, Identifiable {
         accent: (0x8AA0E0, 0x8AA0E0), urgent: (0xF07A7A, 0xF07A7A), success: (0x7CC79A, 0x7CC79A),
         ink: (0xE8E8E8, 0xE8E8E8))
 
-    /// Standard macOS system colors, like Mail or Finder. The sidebar is see-through (it shows the
+    /// Standard macOS system colors in light mode, like Mail or Finder. Dark mode uses deeper
+    /// near-black surfaces than the system grey. The sidebar is see-through (it shows the
     /// blurred desktop) and controls use Liquid Glass; the content stays plain.
     private static let glassColors = Palette(
-        canvas: Color(nsColor: .windowBackgroundColor),
+        canvas: Color(light: .windowBackgroundColor, dark: 0x111113),
         rail: .clear,
-        panel: Color(nsColor: .textBackgroundColor),
-        raised: Color(nsColor: .controlBackgroundColor),
-        sunken: Color(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.04, darkAlpha: 0.05),
+        panel: Color(light: .textBackgroundColor, dark: 0x151517),
+        raised: Color(light: .controlBackgroundColor, dark: 0x1C1C1E),
+        sunken: Color(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.04, darkAlpha: 0.04),
         text: Color(nsColor: .labelColor),
         text2: Color(nsColor: .secondaryLabelColor),
         text3: Color(nsColor: .tertiaryLabelColor),
@@ -272,6 +273,17 @@ enum ThemePalette: String, CaseIterable, Identifiable {
         urgent: Color(nsColor: .systemRed),
         success: Color(nsColor: .systemGreen),
         ink: .accentColor)
+}
+
+private extension Color {
+    /// A system color in light mode and a fixed hex color in dark mode.
+    init(light: NSColor, dark: UInt32) {
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            guard appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua else { return light }
+            return NSColor(srgbRed: CGFloat((dark >> 16) & 0xFF) / 255, green: CGFloat((dark >> 8) & 0xFF) / 255,
+                           blue: CGFloat(dark & 0xFF) / 255, alpha: 1)
+        })
+    }
 }
 
 extension View {
@@ -295,9 +307,11 @@ struct GlassSidebarBackground: View {
     var body: some View {
         if Snapshot.isActive {
             // Offscreen screenshots can't see the desktop, so show a neutral stand-in.
-            Color(light: 0xE6E6E8, dark: 0x2A2A2C)
+            Color(light: 0xE6E6E8, dark: 0x161618)
         } else {
+            // In dark mode, a black tint makes the blur darker so it sits with the deep content.
             BehindWindowBlur()
+                .overlay(Color(light: 0x000000, dark: 0x000000, lightAlpha: 0, darkAlpha: 0.45))
         }
     }
 }
@@ -316,17 +330,78 @@ private struct BehindWindowBlur: NSViewRepresentable {
 
 extension View {
     /// A glass surface in the Liquid Glass theme: real Liquid Glass on macOS 26+, frosted material before.
-    /// In other themes, a plain fill.
+    /// A `tint` colors the glass (for primary actions). In other themes, a plain fill.
     @ViewBuilder
-    func glassSurface<S: InsettableShape>(_ shape: S, fill: Color, interactive: Bool = false) -> some View {
+    func glassSurface<S: InsettableShape>(_ shape: S, fill: Color, tint: Color? = nil, interactive: Bool = false) -> some View {
         if AppearanceSettings.shared.palette.isGlass {
             if #available(macOS 26, *) {
-                self.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+                self.glassEffect(Self.glass(tint: tint, interactive: interactive), in: shape)
+            } else if let tint {
+                self.background(shape.fill(tint))
             } else {
                 self.background(.ultraThinMaterial, in: shape)
             }
         } else {
             self.background(shape.fill(fill))
+        }
+    }
+
+    @available(macOS 26, *)
+    private static func glass(tint: Color?, interactive: Bool) -> Glass {
+        var glass = Glass.regular
+        if let tint { glass = glass.tint(tint) }
+        if interactive { glass = glass.interactive() }
+        return glass
+    }
+
+    /// Lets nearby glass shapes blend and morph together on macOS 26+. Does nothing in other themes.
+    @ViewBuilder
+    func glassContainer(spacing: CGFloat? = nil) -> some View {
+        if AppearanceSettings.shared.palette.isGlass {
+            if #available(macOS 26, *) {
+                GlassEffectContainer(spacing: spacing) { self }
+            } else {
+                self
+            }
+        } else {
+            self
+        }
+    }
+
+    /// Turns a small text or label button into a glass capsule in the Liquid Glass theme.
+    /// In other themes, the view is unchanged.
+    @ViewBuilder
+    func glassChip(height: CGFloat = 24) -> some View {
+        if AppearanceSettings.shared.palette.isGlass {
+            self.padding(.horizontal, 10)
+                .frame(height: height)
+                .glassSurface(Capsule(), fill: .clear, interactive: true)
+        } else {
+            self
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// True inside a `GlassGroup`: controls skip their own glass, so the group reads as one shape.
+    @Entry var inGlassGroup = false
+}
+
+/// A row of related controls on one shared glass capsule, like a macOS 26 toolbar group.
+/// In other themes, a plain row.
+struct GlassGroup<Content: View>: View {
+    var spacing: CGFloat = 0
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if Theme.isGlass {
+            HStack(spacing: spacing) { content }
+                .padding(.horizontal, 3)
+                .padding(.vertical, 2)
+                .glassSurface(Capsule(), fill: .clear)
+                .environment(\.inGlassGroup, true)
+        } else {
+            HStack(spacing: spacing) { content }
         }
     }
 }

@@ -32,45 +32,60 @@ private struct ReaderToolbar: View {
         let ids = Array(store.selection)
         let none = ids.isEmpty
         let single = store.openedMessage
-        HStack(spacing: Theme.s(4)) {
+        HStack(spacing: Theme.isGlass ? Theme.s(8) : Theme.s(4)) {
             if dismissable {
                 IconButton(symbol: "xmark", help: "Close") { store.selection = [] }
-                Rectangle().fill(Theme.hairline).frame(width: 1, height: 18).padding(.horizontal, Theme.s(4))
+                separator
             }
-            IconButton(symbol: "archivebox", help: "Archive (E)") { store.archive(ids) }.disabled(none)
-            IconButton(symbol: "trash", help: "Move to Trash (⌫)") { store.trash(ids) }.disabled(none)
-            IconButton(symbol: "xmark.bin", help: "Junk / Not Junk") { store.markJunk(ids) }.disabled(none)
-            Rectangle().fill(Theme.hairline).frame(width: 1, height: 18).padding(.horizontal, Theme.s(4))
-            IconButton(symbol: single?.flagged == true ? "flag.fill" : "flag", help: "Flag (S)", tint: single?.flagged == true ? Theme.high : Theme.text2) { store.toggleFlag(ids) }.disabled(none)
-            IconButton(symbol: single?.seen == false ? "envelope.badge.fill" : "envelope.badge", help: "Read / Unread (U)") { store.toggleRead(ids) }.disabled(none)
-            Menu {
-                ForEach(store.moveTargets(for: ids)) { f in Button(f.displayName) { store.move(ids, to: f) } }
-            } label: {
-                Image(systemName: "folder").font(Theme.font(size: 13, weight: .medium)).foregroundStyle(Theme.text2)
+            GlassGroup(spacing: Theme.s(4)) {
+                IconButton(symbol: "archivebox", help: "Archive (E)") { store.archive(ids) }.disabled(none)
+                IconButton(symbol: "trash", help: "Move to Trash (⌫)") { store.trash(ids) }.disabled(none)
+                IconButton(symbol: "xmark.bin", help: "Junk / Not Junk") { store.markJunk(ids) }.disabled(none)
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .frame(width: 30, height: 30)
-            .disabled(none)
-            .help("Move to folder")
-            Spacer()
-            if let single {
-                PillButton(title: "Reply", symbol: "arrowshape.turn.up.left", style: .secondary, compact: true) { store.reply(all: false, to: single) }
+            separator
+            GlassGroup(spacing: Theme.s(4)) {
+                IconButton(symbol: single?.flagged == true ? "flag.fill" : "flag", help: "Flag (S)", tint: single?.flagged == true ? Theme.high : Theme.text2) { store.toggleFlag(ids) }.disabled(none)
+                IconButton(symbol: single?.seen == false ? "envelope.badge.fill" : "envelope.badge", help: "Read / Unread (U)") { store.toggleRead(ids) }.disabled(none)
                 Menu {
-                    Button("Reply All") { store.reply(all: true, to: single) }
-                    Button("Forward") { store.forward() }
+                    ForEach(store.moveTargets(for: ids)) { f in Button(f.displayName) { store.move(ids, to: f) } }
                 } label: {
-                    Image(systemName: "chevron.down").font(Theme.font(size: 10, weight: .bold))
+                    Image(systemName: "folder").font(Theme.font(size: 13, weight: .medium)).foregroundStyle(Theme.text2)
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
-                .frame(width: 22)
+                .frame(width: 30, height: 30)
+                .disabled(none)
+                .help("Move to folder")
+            }
+            Spacer()
+            if let single {
+                GlassGroup(spacing: Theme.s(4)) {
+                    PillButton(title: "Reply", symbol: "arrowshape.turn.up.left", style: .secondary, compact: true) { store.reply(all: false, to: single) }
+                    Menu {
+                        Button("Reply All") { store.reply(all: true, to: single) }
+                        Button("Forward") { store.forward() }
+                    } label: {
+                        Image(systemName: "chevron.down").font(Theme.font(size: 10, weight: .bold))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .frame(width: 22)
+                    .help("Reply All or Forward")
+                }
                 DraftWithClaudeButton(message: single)
             }
         }
+        .glassContainer()
         .padding(.horizontal, Theme.s(12))
         .frame(height: 54)
         .padding(.top, dismissable ? 0 : 0)
+    }
+
+    /// A thin line between button groups. The glass groups separate themselves, so it is left out there.
+    @ViewBuilder private var separator: some View {
+        if !Theme.isGlass {
+            Rectangle().fill(Theme.hairline).frame(width: 1, height: 18).padding(.horizontal, Theme.s(4))
+        }
     }
 }
 
@@ -80,7 +95,7 @@ struct DraftWithClaudeButton: View {
     var compact = true
 
     var body: some View {
-        HStack(spacing: 0) {
+        GlassGroup {
             PillButton(title: "Draft with Claude", symbol: "sparkle", style: .ai, compact: compact) { store.draftWithClaude(message) }
             Menu {
                 ForEach(ReplyTone.allCases) { tone in
@@ -91,7 +106,7 @@ struct DraftWithClaudeButton: View {
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
-            .frame(width: 20)
+            .frame(width: Theme.isGlass ? 24 : 20)
             .help("Choose a tone")
         }
         .disabled(!store.aiReady)
@@ -239,6 +254,7 @@ struct MessageDetailView: View {
                 .foregroundStyle(Theme.text2)
         }
         .buttonStyle(.plain)
+        .glassChip()
         .help(themed ? "Show this email as the sender designed it" : "Show this email in your theme colors and font")
     }
 
@@ -332,10 +348,12 @@ struct InsightCard: View {
                     if deep == nil && store.aiReady {
                         Button(busy ? "Reading…" : "Summarize") { store.summarize(message) }
                             .buttonStyle(.plain).font(Theme.font(size: 12, weight: .medium)).foregroundStyle(Theme.text2).disabled(busy)
+                            .glassChip()
                     }
                     if let insight, !insight.done, insight.priority >= 1 {
                         Button { store.setDone(message.id) } label: { Label("Done", systemImage: "checkmark") }
                             .buttonStyle(.plain).font(Theme.font(size: 12, weight: .medium)).foregroundStyle(Theme.text2)
+                            .glassChip()
                     }
                 }
                 if busy { ThinkingBar() }

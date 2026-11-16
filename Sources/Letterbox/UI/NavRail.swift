@@ -16,8 +16,7 @@ struct NavRail: View {
                 .padding(.bottom, Theme.s(16))
             HStack(spacing: Theme.s(8)) {
                 PillButton(title: "New message", symbol: "square.and.pencil", style: .primary, expand: true) { store.newMessage() }
-                IconButton(symbol: "command", help: "Search or ask Claude (⌘K)", size: 30) { store.showPalette = true }
-                    .panel(radius: 9, fill: Theme.raised)
+                paletteButton
             }
             .padding(.bottom, Theme.s(18))
 
@@ -54,6 +53,16 @@ struct NavRail: View {
 
     /// Room for the open/close arrows, only needed when groups can open into accounts.
     private var gutter: CGFloat { store.multipleAccounts ? 16 : 0 }
+
+    /// Opens the command palette. A glass circle in the Liquid Glass theme, a bordered square otherwise.
+    @ViewBuilder private var paletteButton: some View {
+        let button = IconButton(symbol: "command", help: "Search or ask Claude (⌘K)", size: 30) { store.showPalette = true }
+        if Theme.isGlass {
+            button
+        } else {
+            button.panel(radius: 9, fill: Theme.raised)
+        }
+    }
 
     private var brand: some View {
         HStack(spacing: Theme.s(10)) {
@@ -405,13 +414,9 @@ private struct AccountRow: View {
                 syncLine
             }
             Spacer(minLength: 0)
-            Button { store.addingAccount = true } label: {
-                Image(systemName: "person.crop.circle.badge.plus").font(Theme.font(size: 13)).foregroundStyle(Theme.text3).frame(width: 26, height: 26)
-            }
-            .buttonStyle(.plain)
-            .help("Add an account")
+            IconButton(symbol: "person.crop.circle.badge.plus", help: "Add an account", tint: Theme.text3, size: 26) { store.addingAccount = true }
             SettingsLink {
-                Image(systemName: "gearshape").font(Theme.font(size: 13)).foregroundStyle(Theme.text3).frame(width: 26, height: 26)
+                IconLabel(symbol: "gearshape", tint: Theme.text3, size: 26)
             }
             .buttonStyle(.plain)
             .help("Settings (⌘,)")

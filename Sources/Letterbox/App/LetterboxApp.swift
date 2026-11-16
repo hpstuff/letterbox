@@ -118,6 +118,13 @@ struct MailCommands: Commands {
         CommandGroup(after: .sidebar) {
             Button(store.unreadOnly ? "Show All Messages" : "Show Only Unread") { store.unreadOnly.toggle() }
                 .keyboardShortcut("u", modifiers: [.command, .option])
+            Divider()
+            // SwiftUI leaves this out of the View menu here, so add it by hand.
+            Button("Toggle Full Screen") {
+                let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first { $0.isVisible && $0.canBecomeMain }
+                window?.toggleFullScreen(nil)
+            }
+            .keyboardShortcut("f", modifiers: [.command, .control])
         }
     }
 }
