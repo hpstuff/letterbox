@@ -21,7 +21,7 @@ struct OnboardingView: View {
         ZStack {
             Theme.canvas.ignoresSafeArea()
             MaybeScroll {
-                VStack(alignment: .leading, spacing: 26) {
+                VStack(alignment: .leading, spacing: Theme.s(26)) {
                     header
                     providerGrid
                     form
@@ -30,7 +30,7 @@ struct OnboardingView: View {
                     footer
                 }
                 .frame(width: 460)
-                .padding(.vertical, 56)
+                .padding(.vertical, Theme.s(56))
                 .frame(maxWidth: .infinity)
             }
         }
@@ -50,7 +50,7 @@ struct OnboardingView: View {
     // MARK: Sections
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.s(10)) {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .frame(width: 64, height: 64)
@@ -58,22 +58,22 @@ struct OnboardingView: View {
                 .font(Theme.serif(30, .regular))
                 .foregroundStyle(Theme.text)
             Text("A quiet, fast mail client for any IMAP account — organized by Claude.")
-                .font(.system(size: 13.5))
+                .font(Theme.font(size: 13.5))
                 .foregroundStyle(Theme.text2)
         }
     }
 
     private var providerGrid: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.s(10)) {
             Text("Provider").microLabel()
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.s(8)), count: 5), spacing: Theme.s(8)) {
                 ForEach(MailProvider.all) { p in
                     Button {
                         providerPinned = true
                         select(p)
                     } label: {
                         Text(p.name)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(Theme.font(size: 12, weight: .medium))
                             .foregroundStyle(provider == p ? Theme.onInk : Theme.text)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
@@ -89,7 +89,7 @@ struct OnboardingView: View {
     }
 
     private var form: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.s(12)) {
             VStack(spacing: 0) {
                 row("Email") {
                     TextField("you@example.com", text: $email)
@@ -115,18 +115,18 @@ struct OnboardingView: View {
             .panel(radius: 12)
             .onSubmit(submit)
 
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: "info.circle").font(.system(size: 11)).foregroundStyle(Theme.text3)
-                Text(provider.help).font(.system(size: 12)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: Theme.s(6)) {
+                Image(systemName: "info.circle").font(Theme.font(size: 11)).foregroundStyle(Theme.text3)
+                Text(provider.help).font(Theme.font(size: 12)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
                 if let url = provider.helpURL {
-                    Link("Open ↗", destination: url).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.accent)
+                    Link("Open ↗", destination: url).font(Theme.font(size: 12, weight: .medium)).foregroundStyle(Theme.accent)
                 }
             }
         }
     }
 
     private var serverForm: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.s(10)) {
             Text("Servers").microLabel()
             VStack(spacing: 0) {
                 serverRow("Incoming (IMAP)", placeholder: "imap.example.com", host: $account.imapHost, port: $account.imapPort, security: $account.imapSecurity)
@@ -135,30 +135,30 @@ struct OnboardingView: View {
             }
             .panel(radius: 12)
             Toggle("Server saves sent mail automatically", isOn: $account.serverSavesSent)
-                .font(.system(size: 12))
+                .font(Theme.font(size: 12))
                 .foregroundStyle(Theme.text2)
                 .toggleStyle(.checkbox)
         }
     }
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.s(14)) {
             HStack {
                 if provider.id != "custom" {
                     Button(showServers ? "Hide server settings" : "Server settings") { showServers.toggle() }
                         .buttonStyle(.plain)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(Theme.font(size: 12, weight: .medium))
                         .foregroundStyle(Theme.text2)
                 }
                 Spacer()
                 Button(action: submit) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Theme.s(8)) {
                         if working { ProgressView().controlSize(.small) }
                         Text(working ? "Connecting…" : "Sign in")
                     }
-                    .font(.system(size: 13, weight: .medium))
+                    .font(Theme.font(size: 13, weight: .medium))
                     .foregroundStyle(Theme.onInk)
-                    .padding(.horizontal, 22)
+                    .padding(.horizontal, Theme.s(22))
                     .frame(height: 34)
                     .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.ink).opacity(canSubmit ? 1 : 0.35))
                 }
@@ -167,19 +167,19 @@ struct OnboardingView: View {
                 .keyboardShortcut(.defaultAction)
             }
             Text("Your password is stored in the macOS Keychain and sent only to your mail server. Claude features run through your own Claude Code CLI.")
-                .font(.system(size: 11.5))
+                .font(Theme.font(size: 11.5))
                 .foregroundStyle(Theme.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private func errorView(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: Theme.s(8)) {
             Image(systemName: "exclamationmark.circle").foregroundStyle(Theme.urgent)
             Text(message).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
         }
-        .font(.system(size: 12.5))
-        .padding(12)
+        .font(Theme.font(size: 12.5))
+        .padding(Theme.s(12))
         .frame(maxWidth: .infinity, alignment: .leading)
         .panel(radius: 10, fill: Theme.sunken)
     }
@@ -187,18 +187,18 @@ struct OnboardingView: View {
     // MARK: Rows
 
     private func row<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
-        HStack(spacing: 12) {
-            Text(label).font(.system(size: 12.5)).foregroundStyle(Theme.text2).frame(width: 118, alignment: .leading)
-            content().font(.system(size: 13))
+        HStack(spacing: Theme.s(12)) {
+            Text(label).font(Theme.font(size: 12.5)).foregroundStyle(Theme.text2).frame(width: 118, alignment: .leading)
+            content().font(Theme.font(size: 13))
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, Theme.s(14))
         .frame(height: 40)
     }
 
     private func serverRow(_ label: String, placeholder: String, host: Binding<String>, port: Binding<UInt16>, security: Binding<ConnectionSecurity>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label).font(.system(size: 12)).foregroundStyle(Theme.text3)
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.s(8)) {
+            Text(label).font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
+            HStack(spacing: Theme.s(8)) {
                 TextField(placeholder, text: host).textFieldStyle(.roundedBorder)
                 TextField("Port", value: port, format: .number.grouping(.never)).textFieldStyle(.roundedBorder).frame(width: 64)
                 Picker("", selection: security) {
@@ -207,9 +207,9 @@ struct OnboardingView: View {
                 .labelsHidden()
                 .frame(width: 112)
             }
-            .font(.system(size: 12.5))
+            .font(Theme.font(size: 12.5))
         }
-        .padding(14)
+        .padding(Theme.s(14))
     }
 
     // MARK: Logic

@@ -20,12 +20,12 @@ struct MessageListPane: View {
         @Bindable var store = store
         VStack(spacing: 0) {
             header
-            VStack(spacing: 10) {
+            VStack(spacing: Theme.s(10)) {
                 SearchField(text: $store.searchText, prompt: "Search all mail", focus: $searchFocused)
                 FilterBar(selection: $filter)
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 10)
+            .padding(.horizontal, Theme.s(14))
+            .padding(.bottom, Theme.s(10))
             Rectangle().fill(Theme.hairline).frame(height: 1)
             if rows.isEmpty { emptyState } else { list }
         }
@@ -37,28 +37,28 @@ struct MessageListPane: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Theme.s(2)) {
                 Text(store.title)
                     .font(Theme.display(22, .bold))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text(store.subtitle).font(.system(size: 12)).foregroundStyle(Theme.text3)
+                Text(store.subtitle).font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
             }
             Spacer()
             IconButton(symbol: "arrow.clockwise", help: "Check for new mail (⇧⌘N)") { store.refresh() }
                 .rotationEffect(.degrees(store.isSyncing ? 360 : 0))
                 .animation(store.isSyncing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: store.isSyncing)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 20)
-        .padding(.bottom, 12)
+        .padding(.horizontal, Theme.s(18))
+        .padding(.top, Theme.s(20))
+        .padding(.bottom, Theme.s(12))
     }
 
     private var list: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 3) {
+                LazyVStack(spacing: Theme.s(3)) {
                     ForEach(rows) { m in
                         MessageCard(
                             message: m,
@@ -74,7 +74,7 @@ struct MessageListPane: View {
                         .contextMenu { MessageContextMenu(ids: menuIDs(for: m), single: m) }
                     }
                 }
-                .padding(8)
+                .padding(Theme.s(8))
             }
             .focusable()
             .focused($listFocused)
@@ -145,23 +145,23 @@ struct MessageListPane: View {
 
     @ViewBuilder
     private var emptyState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Theme.s(12)) {
             Spacer()
             if !store.searchText.isEmpty {
                 emptyIcon("magnifyingglass")
-                Text("No results for “\(store.searchText)”").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.text)
-                Text("Try different words, or ask Claude with ⌘K.").font(.system(size: 12)).foregroundStyle(Theme.text3)
+                Text("No results for “\(store.searchText)”").font(Theme.font(size: 14, weight: .semibold)).foregroundStyle(Theme.text)
+                Text("Try different words, or ask Claude with ⌘K.").font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
             } else if store.isSyncing && store.syncProgress != nil {
                 ProgressView().controlSize(.small)
-                Text(store.syncProgress ?? "").font(.system(size: 12)).foregroundStyle(Theme.text3)
+                Text(store.syncProgress ?? "").font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
             } else if filter == .important {
                 emptyIcon("sparkle")
-                Text("Nothing important here").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.text)
-                Text("Claude hasn’t flagged anything in this mailbox.").font(.system(size: 12)).foregroundStyle(Theme.text3)
+                Text("Nothing important here").font(Theme.font(size: 14, weight: .semibold)).foregroundStyle(Theme.text)
+                Text("Claude hasn’t flagged anything in this mailbox.").font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
             } else {
                 emptyIcon("checkmark")
-                Text(filter == .unread ? "No unread mail" : "All clear").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.text)
-                Text("New mail will show up here.").font(.system(size: 12)).foregroundStyle(Theme.text3)
+                Text(filter == .unread ? "No unread mail" : "All clear").font(Theme.font(size: 14, weight: .semibold)).foregroundStyle(Theme.text)
+                Text("New mail will show up here.").font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
             }
             Spacer()
         }
@@ -170,7 +170,7 @@ struct MessageListPane: View {
 
     private func emptyIcon(_ s: String) -> some View {
         Image(systemName: s)
-            .font(.system(size: 18, weight: .semibold))
+            .font(Theme.font(size: 18, weight: .semibold))
             .foregroundStyle(Theme.accentText)
             .frame(width: 46, height: 46)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.accentSoft))
@@ -182,16 +182,16 @@ struct FilterBar: View {
     @Namespace private var ns
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: Theme.s(2)) {
             ForEach(ListFilter.allCases) { f in
                 Button {
                     withAnimation(.snappy(duration: 0.2)) { selection = f }
                 } label: {
-                    HStack(spacing: 5) {
+                    HStack(spacing: Theme.s(5)) {
                         if f == .important { SparkleIcon(size: 9.5) }
                         Text(f.rawValue)
                     }
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Theme.font(size: 12, weight: .semibold))
                     .foregroundStyle(selection == f ? Theme.text : Theme.text3)
                     .frame(maxWidth: .infinity)
                     .frame(height: 26)
@@ -208,7 +208,7 @@ struct FilterBar: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(3)
+        .padding(Theme.s(3))
         .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.sunken))
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
     }
@@ -231,41 +231,41 @@ struct MessageCard: View {
 
     var body: some View {
         let unread = !message.seen
-        HStack(alignment: .top, spacing: 11) {
+        HStack(alignment: .top, spacing: Theme.s(11)) {
             AvatarView(name: outgoing ? (message.to.first?.name ?? "") : message.fromName,
                        email: outgoing ? (message.to.first?.email ?? "") : message.fromEmail,
                        size: 36, ring: unread ? Theme.accent : nil)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: Theme.s(3)) {
+                HStack(spacing: Theme.s(6)) {
                     Text(title)
-                        .font(.system(size: 13.5, weight: unread ? .bold : .medium))
+                        .font(Theme.font(size: 13.5, weight: unread ? .bold : .medium))
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                     Spacer(minLength: 4)
-                    if message.hasAttachments { Image(systemName: "paperclip").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.text3) }
-                    if message.flagged { Image(systemName: "flag.fill").font(.system(size: 9.5)).foregroundStyle(Theme.text2) }
-                    if message.answered { Image(systemName: "arrowshape.turn.up.left.fill").font(.system(size: 9)).foregroundStyle(Theme.text3) }
+                    if message.hasAttachments { Image(systemName: "paperclip").font(Theme.font(size: 10, weight: .semibold)).foregroundStyle(Theme.text3) }
+                    if message.flagged { Image(systemName: "flag.fill").font(Theme.font(size: 9.5)).foregroundStyle(Theme.text2) }
+                    if message.answered { Image(systemName: "arrowshape.turn.up.left.fill").font(Theme.font(size: 9)).foregroundStyle(Theme.text3) }
                     Text(RelativeDate.short(message.date))
-                        .font(.system(size: 11.5, weight: unread ? .semibold : .regular).monospacedDigit())
+                        .font(Theme.font(size: 11.5, weight: unread ? .semibold : .regular).monospacedDigit())
                         .foregroundStyle(Theme.text3)
                 }
                 Text(message.displaySubject)
-                    .font(.system(size: 13, weight: unread ? .semibold : .regular))
+                    .font(Theme.font(size: 13, weight: unread ? .semibold : .regular))
                     .foregroundStyle(unread ? Theme.text : Theme.text2)
                     .lineLimit(1)
                 if let insight, !insight.summary.isEmpty {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.s(5)) {
                         SparkleIcon(size: 9)
-                        Text(insight.summary).font(.system(size: 12)).foregroundStyle(Theme.text2).lineLimit(2)
+                        Text(insight.summary).font(Theme.font(size: 12)).foregroundStyle(Theme.text2).lineLimit(2)
                     }
                 } else if !message.snippet.isEmpty {
-                    Text(message.snippet).font(.system(size: 12)).foregroundStyle(Theme.text3).lineLimit(2)
+                    Text(message.snippet).font(Theme.font(size: 12)).foregroundStyle(Theme.text3).lineLimit(2)
                 }
                 chips
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
+        .padding(.horizontal, Theme.s(12))
+        .padding(.vertical, Theme.s(11))
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(selected ? Theme.accentSoft : (hovering ? Theme.hover : .clear)))
 
         .contentShape(Rectangle())
@@ -275,12 +275,12 @@ struct MessageCard: View {
     @ViewBuilder private var chips: some View {
         let status = insight.flatMap { $0.done ? nil : statusChip($0) }
         if status != nil || alias != nil || folderName != nil {
-            HStack(spacing: 5) {
+            HStack(spacing: Theme.s(5)) {
                 if let status { TagChip(text: status.0, color: status.1) }
                 if let alias { TagChip(text: alias, symbol: "at") }
                 if let folderName { TagChip(text: folderName, symbol: "folder") }
             }
-            .padding(.top, 3)
+            .padding(.top, Theme.s(3))
         }
     }
 

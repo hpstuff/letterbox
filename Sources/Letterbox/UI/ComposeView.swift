@@ -22,7 +22,7 @@ struct ComposeView: View {
                     withAnimation(.snappy(duration: 0.2)) { draft.showCcBcc.toggle() }
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 11.5, weight: .medium))
+                .font(Theme.font(size: 11.5, weight: .medium))
                 .foregroundStyle(.secondary)
             }
             .zIndex(3)
@@ -42,7 +42,7 @@ struct ComposeView: View {
             FieldRow(label: "Subject") {
                 TextField("", text: $draft.subject)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(Theme.font(size: 13, weight: .medium))
                     .focused($focus, equals: .subject)
             }
             divider
@@ -80,10 +80,10 @@ struct ComposeView: View {
     }
 
     private var composeHeader: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.s(10)) {
             Color.clear.frame(width: 64)
             Text(draft.subject.isEmpty ? "New message" : draft.subject)
-                .font(.system(size: 13, weight: .semibold))
+                .font(Theme.font(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.text)
                 .lineLimit(1)
             Spacer()
@@ -93,12 +93,12 @@ struct ComposeView: View {
                 .disabled(draft.isSending)
                 .help("Send (⌘↩)")
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, Theme.s(14))
         .frame(height: 50)
     }
 
     private var divider: some View {
-        Divider().padding(.leading, 16)
+        Divider().padding(.leading, Theme.s(16))
     }
 
     private var fromRow: some View {
@@ -112,8 +112,8 @@ struct ComposeView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Text(fromLabel).font(.system(size: 13))
+                HStack(spacing: Theme.s(4)) {
+                    Text(fromLabel).font(Theme.font(size: 13))
                 }
             }
             .menuStyle(.borderlessButton)
@@ -129,17 +129,17 @@ struct ComposeView: View {
     }
 
     private var quoteSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.s(8)) {
             Button {
                 withAnimation(.snappy(duration: 0.2)) { draft.showQuote.toggle() }
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "ellipsis").font(.system(size: 11, weight: .bold))
+                HStack(spacing: Theme.s(6)) {
+                    Image(systemName: "ellipsis").font(Theme.font(size: 11, weight: .bold))
                     Text(draft.showQuote ? "Hide quoted text" : "Show quoted text")
                 }
-                .font(.system(size: 11.5, weight: .semibold))
+                .font(Theme.font(size: 11.5, weight: .semibold))
                 .foregroundStyle(Theme.text3)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, Theme.s(10))
                 .frame(height: 22)
                 .background(Capsule().fill(Theme.sunken))
             }
@@ -147,26 +147,26 @@ struct ComposeView: View {
             if draft.showQuote {
                 ScrollView {
                     Text(draft.quote)
-                        .font(.system(size: 12.5))
+                        .font(Theme.font(size: 12.5))
                         .foregroundStyle(Theme.text3)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 180)
-                .padding(12)
+                .padding(Theme.s(12))
                 .panel(radius: 10, fill: Theme.sunken)
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.bottom, 10)
+        .padding(.horizontal, Theme.s(18))
+        .padding(.bottom, Theme.s(10))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var attachmentTray: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.s(8)) {
                 ForEach(draft.attachments) { a in
-                    HStack(spacing: 6) {
+                    HStack(spacing: Theme.s(6)) {
                         Image(systemName: "doc").foregroundStyle(.tint)
                         Text(a.filename).lineLimit(1).frame(maxWidth: 160)
                         Text(ByteCountFormatter.string(fromByteCount: Int64(a.data.count), countStyle: .file))
@@ -178,28 +178,28 @@ struct ComposeView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    .font(.system(size: 11.5))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .font(Theme.font(size: 11.5))
+                    .padding(.horizontal, Theme.s(10))
+                    .padding(.vertical, Theme.s(6))
                     .background(.quaternary.opacity(0.6), in: Capsule())
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, Theme.s(16))
+            .padding(.vertical, Theme.s(10))
         }
         .background(.bar)
     }
 
     private func errorBar(_ message: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.s(8)) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             Text(message).lineLimit(3)
             Spacer()
             Button { draft.error = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
         }
-        .font(.system(size: 12))
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .font(Theme.font(size: 12))
+        .padding(.horizontal, Theme.s(16))
+        .padding(.vertical, Theme.s(10))
         .background(Color.orange.opacity(0.1))
     }
 
@@ -229,14 +229,14 @@ private struct FieldRow<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.s(8)) {
             Text(label)
-                .font(.system(size: 12.5))
+                .font(Theme.font(size: 12.5))
                 .foregroundStyle(.secondary)
                 .frame(width: 54, alignment: .trailing)
             content
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Theme.s(16))
         .frame(minHeight: 38)
     }
 }
@@ -251,7 +251,7 @@ private struct RecipientField: View {
     var body: some View {
         TextField("", text: $text)
             .textFieldStyle(.plain)
-            .font(.system(size: 13))
+            .font(Theme.font(size: 13))
             .onChange(of: text) { _, _ in updateSuggestions() }
             .onKeyPress(.downArrow) {
                 guard !suggestions.isEmpty else { return .ignored }
@@ -290,22 +290,22 @@ private struct RecipientField: View {
     private var suggestionList: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(suggestions.enumerated()), id: \.element.email) { i, c in
-                HStack(spacing: 8) {
+                HStack(spacing: Theme.s(8)) {
                     AvatarView(name: c.name, email: c.email, size: 22)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(c.name.isEmpty ? c.email : c.name).font(.system(size: 12.5, weight: .medium))
-                        if !c.name.isEmpty { Text(c.email).font(.system(size: 11)).foregroundStyle(.secondary) }
+                        Text(c.name.isEmpty ? c.email : c.name).font(Theme.font(size: 12.5, weight: .medium))
+                        if !c.name.isEmpty { Text(c.email).font(Theme.font(size: 11)).foregroundStyle(.secondary) }
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, Theme.s(10))
+                .padding(.vertical, Theme.s(5))
                 .background(i == highlighted ? Color.accentColor.opacity(0.15) : .clear, in: RoundedRectangle(cornerRadius: 6))
                 .contentShape(Rectangle())
                 .onTapGesture { accept(c) }
             }
         }
-        .padding(5)
+        .padding(Theme.s(5))
         .frame(width: 320)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator.opacity(0.7), lineWidth: 0.5))
@@ -356,7 +356,7 @@ private struct BodyEditor: NSViewRepresentable {
         tv.isRichText = false
         tv.allowsUndo = true
         tv.drawsBackground = false
-        tv.font = .systemFont(ofSize: 14)
+        tv.font = AppearanceSettings.shared.nsFont(size: 14)
         tv.textColor = .labelColor
         tv.textContainerInset = NSSize(width: 18, height: 14)
         tv.isAutomaticQuoteSubstitutionEnabled = true
@@ -366,7 +366,7 @@ private struct BodyEditor: NSViewRepresentable {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = 3
         tv.defaultParagraphStyle = paragraph
-        tv.typingAttributes = [.font: NSFont.systemFont(ofSize: 14), .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph]
+        tv.typingAttributes = [.font: AppearanceSettings.shared.nsFont(size: 14), .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph]
         tv.string = text
         tv.setSelectedRange(NSRange(location: 0, length: 0))
         if focusOnAppear {
@@ -402,13 +402,13 @@ private struct AIComposeBar: View {
     @State private var expanded = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.s(10)) {
+            HStack(spacing: Theme.s(8)) {
                 SparkleIcon(size: 12)
                 TextField(draft.context.isEmpty ? "Tell Claude what to write…" : "Tell Claude what to say — e.g. “yes, Tuesday 3pm works”",
                           text: $draft.aiInstruction)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .font(Theme.font(size: 13))
                     .onSubmit { store.generate(draft) }
                     .disabled(!store.aiReady)
                 if draft.aiBusy {
@@ -422,7 +422,7 @@ private struct AIComposeBar: View {
                             Button { store.improve(draft, kind: k) } label: { Label(k.rawValue, systemImage: k.symbol) }
                         }
                     } label: {
-                        Text("Improve").font(.system(size: 12, weight: .semibold))
+                        Text("Improve").font(Theme.font(size: 12, weight: .semibold))
                     }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
@@ -434,16 +434,16 @@ private struct AIComposeBar: View {
                 }
             }
             if expanded {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.s(6)) {
                     ForEach(ReplyTone.allCases) { tone in
                         let on = draft.aiTone == tone
                         Button {
                             draft.aiTone = on ? nil : tone
                         } label: {
                             Text(tone.rawValue)
-                                .font(.system(size: 11.5, weight: .semibold))
+                                .font(Theme.font(size: 11.5, weight: .semibold))
                                 .foregroundStyle(on ? Theme.onInk : Theme.text2)
-                                .padding(.horizontal, 10)
+                                .padding(.horizontal, Theme.s(10))
                                 .frame(height: 24)
                                 .background {
                                     if on { Capsule().fill(Theme.ink) } else { Capsule().fill(Theme.raised) }
@@ -457,15 +457,15 @@ private struct AIComposeBar: View {
             }
             if draft.aiBusy { ThinkingBar() }
             if let error = draft.aiError {
-                Text(error).font(.system(size: 11.5)).foregroundStyle(Theme.urgent).lineLimit(3)
+                Text(error).font(Theme.font(size: 11.5)).foregroundStyle(Theme.urgent).lineLimit(3)
             }
             if !store.aiReady {
-                Text("Claude isn’t connected. Set it up in Settings → Claude.").font(.system(size: 11.5)).foregroundStyle(Theme.text3)
+                Text("Claude isn’t connected. Set it up in Settings → Claude.").font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3)
             }
         }
-        .padding(12)
+        .padding(Theme.s(12))
         .aurora(radius: 12, animated: draft.aiBusy)
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
+        .padding(.horizontal, Theme.s(16))
+        .padding(.top, Theme.s(12))
     }
 }

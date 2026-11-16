@@ -23,12 +23,12 @@ struct DashboardView: View {
     }
 
     private func content(_ model: DashboardModel) -> some View {
-        VStack(alignment: .leading, spacing: 30) {
+        VStack(alignment: .leading, spacing: Theme.s(30)) {
             header
             BriefingSection()
             Metrics(model: model)
             if effectiveWidth > 1000 {
-                HStack(alignment: .top, spacing: 36) {
+                HStack(alignment: .top, spacing: Theme.s(36)) {
                     lists(model).frame(maxWidth: .infinity)
                     sidebar(model).frame(width: 320)
                 }
@@ -38,8 +38,8 @@ struct DashboardView: View {
             }
         }
         .padding(.horizontal, effectiveWidth > 700 ? 44 : 28)
-        .padding(.top, 44)
-        .padding(.bottom, 48)
+        .padding(.top, Theme.s(44))
+        .padding(.bottom, Theme.s(48))
         .frame(maxWidth: 1180, alignment: .leading)
         .frame(maxWidth: .infinity)
     }
@@ -54,12 +54,12 @@ struct DashboardView: View {
     private var header: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .lastTextBaseline) { titleBlock; Spacer(minLength: 16); actions }
-            VStack(alignment: .leading, spacing: 14) { titleBlock; actions }
+            VStack(alignment: .leading, spacing: Theme.s(14)) { titleBlock; actions }
         }
     }
 
     private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.s(8)) {
             Text(Date().formatted(.dateTime.weekday(.wide).month(.wide).day())).microLabel()
             Text(greeting)
                 .font(Theme.serif(34, .regular))
@@ -70,7 +70,7 @@ struct DashboardView: View {
     }
 
     private var actions: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.s(8)) {
             PillButton(title: "Ask Claude", symbol: "sparkle", style: .secondary, compact: true) { store.showPalette = true }
             PillButton(title: "Clean up", symbol: "wand.and.stars", style: .secondary, compact: true) {
                 store.startAsk("Suggest a clean-up: find newsletters, promotions and automated notifications in my inbox that I can archive.")
@@ -85,7 +85,7 @@ struct DashboardView: View {
 
     @ViewBuilder
     private func lists(_ model: DashboardModel) -> some View {
-        VStack(alignment: .leading, spacing: 30) {
+        VStack(alignment: .leading, spacing: Theme.s(30)) {
             ConversationList(title: "Needs your reply", items: model.needsReply, mode: .reply,
                              empty: store.threadInsights.isEmpty ? emptyAnalysisText : "You’re all caught up on replies.")
             if !model.todo.isEmpty {
@@ -102,7 +102,7 @@ struct DashboardView: View {
 
     @ViewBuilder
     private func sidebar(_ model: DashboardModel) -> some View {
-        VStack(alignment: .leading, spacing: 30) {
+        VStack(alignment: .leading, spacing: Theme.s(30)) {
             AgendaView(entries: model.agenda)
             if !model.low.isEmpty { LowPriority(items: model.low) }
         }
@@ -115,12 +115,12 @@ private struct BriefingSection: View {
     @Environment(MailStore.self) private var store
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.s(14)) {
             switch store.aiStatus {
             case .missing, .off:
                 Text("Letterbox uses your Claude Code CLI to organize conversations and draft replies.")
                     .font(Theme.serif(19, .regular)).foregroundStyle(Theme.text2)
-                SettingsLink { Text("Set up Claude in Settings").font(.system(size: 12.5, weight: .medium)) }
+                SettingsLink { Text("Set up Claude in Settings").font(Theme.font(size: 12.5, weight: .medium)) }
                     .foregroundStyle(Theme.accent)
             default:
                 if let b = store.briefing {
@@ -130,11 +130,11 @@ private struct BriefingSection: View {
                         .foregroundStyle(Theme.text)
                         .fixedSize(horizontal: false, vertical: true)
                     if !b.highlights.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: Theme.s(8)) {
                             ForEach(Array(b.highlights.enumerated()), id: \.offset) { i, h in
-                                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                                    Text("\(i + 1)").font(.system(size: 12, weight: .medium).monospacedDigit()).foregroundStyle(Theme.text3).frame(width: 12)
-                                    Text(h).font(.system(size: 13.5)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
+                                HStack(alignment: .firstTextBaseline, spacing: Theme.s(12)) {
+                                    Text("\(i + 1)").font(Theme.font(size: 12, weight: .medium).monospacedDigit()).foregroundStyle(Theme.text3).frame(width: 12)
+                                    Text(h).font(Theme.font(size: 13.5)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
                                 }
                             }
                         }
@@ -150,7 +150,7 @@ private struct BriefingSection: View {
     }
 
     private var meta: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.s(8)) {
             SparkleIcon(size: 10)
             Group {
                 if case .working(let s) = store.aiStatus {
@@ -165,7 +165,7 @@ private struct BriefingSection: View {
                     Text("Briefing by Claude")
                 }
             }
-            .font(.system(size: 11.5))
+            .font(Theme.font(size: 11.5))
             .foregroundStyle(Theme.text3)
             if store.aiStatus.isWorking { ThinkingBar().frame(width: 80) }
         }
@@ -191,7 +191,7 @@ private struct Metrics: View {
                 store.unreadOnly = true
             }
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, Theme.s(16))
         .panel(radius: 12)
     }
 
@@ -200,14 +200,14 @@ private struct Metrics: View {
     }
 
     private func metric(_ value: Int, _ label: String, action: (() -> Void)? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: Theme.s(3)) {
             Text("\(value)")
-                .font(.system(size: 26, weight: .light).monospacedDigit())
+                .font(Theme.font(size: 26, weight: .light).monospacedDigit())
                 .foregroundStyle(Theme.text)
                 .contentTransition(.numericText())
-            Text(label).font(.system(size: 11.5)).foregroundStyle(Theme.text3).lineLimit(1)
+            Text(label).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3).lineLimit(1)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, Theme.s(20))
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture { action?() }
@@ -227,12 +227,12 @@ private struct ConversationList: View {
     @State private var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.s(10)) {
             SectionHeader(title: title, count: items.count)
             if items.isEmpty {
                 if !empty.isEmpty {
-                    Text(empty).font(.system(size: 13)).foregroundStyle(Theme.text3)
-                        .padding(.vertical, 14).padding(.horizontal, 16)
+                    Text(empty).font(Theme.font(size: 13)).foregroundStyle(Theme.text3)
+                        .padding(.vertical, Theme.s(14)).padding(.horizontal, Theme.s(16))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .panel(radius: 12)
                 }
@@ -241,14 +241,14 @@ private struct ConversationList: View {
                 VStack(spacing: 0) {
                     ForEach(Array(shown.enumerated()), id: \.element.id) { idx, item in
                         ConversationRow(item: item, mode: mode)
-                        if idx < shown.count - 1 { Rectangle().fill(Theme.hairline).frame(height: 1).padding(.leading, 58) }
+                        if idx < shown.count - 1 { Rectangle().fill(Theme.hairline).frame(height: 1).padding(.leading, Theme.s(58)) }
                     }
                 }
                 .panel(radius: 12)
                 if items.count > 6 {
                     Button(expanded ? "Show less" : "Show all \(items.count)") { withAnimation(.snappy) { expanded.toggle() } }
                         .buttonStyle(.plain)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(Theme.font(size: 12, weight: .medium))
                         .foregroundStyle(Theme.text2)
                 }
             }
@@ -267,34 +267,34 @@ struct ConversationRow: View {
 
     var body: some View {
         let selected = store.selection.contains(item.message.id)
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: Theme.s(14)) {
             AvatarView(name: c.counterpart.name, email: c.counterpart.email, size: 30, ring: c.unread ? Theme.accent : nil)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(c.counterpart.display).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Theme.text).lineLimit(1)
-                    if i.priority >= 3 { Text("Urgent").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.urgent) }
+            VStack(alignment: .leading, spacing: Theme.s(4)) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.s(8)) {
+                    Text(c.counterpart.display).font(Theme.font(size: 13.5, weight: .semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                    if i.priority >= 3 { Text("Urgent").font(Theme.font(size: 11, weight: .medium)).foregroundStyle(Theme.urgent) }
                     Spacer(minLength: 8)
-                    Text(meta).font(.system(size: 11.5).monospacedDigit()).foregroundStyle(metaColor)
+                    Text(meta).font(Theme.font(size: 11.5).monospacedDigit()).foregroundStyle(metaColor)
                 }
-                Text(c.subject).font(.system(size: 12.5)).foregroundStyle(Theme.text3).lineLimit(1)
-                Text(i.summary).font(.system(size: 13)).foregroundStyle(Theme.text).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 10) {
+                Text(c.subject).font(Theme.font(size: 12.5)).foregroundStyle(Theme.text3).lineLimit(1)
+                Text(i.summary).font(Theme.font(size: 13)).foregroundStyle(Theme.text).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: Theme.s(10)) {
                     if !i.action.isEmpty && mode != .waiting {
                         Label(i.action, systemImage: "arrow.turn.down.right")
                             .labelStyle(TightLabel())
-                            .font(.system(size: 12))
+                            .font(Theme.font(size: 12))
                             .foregroundStyle(Theme.text2)
                             .lineLimit(1)
                     }
-                    Text(threadLine).font(.system(size: 11.5)).foregroundStyle(Theme.text3).lineLimit(1)
+                    Text(threadLine).font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3).lineLimit(1)
                     Spacer(minLength: 8)
                     buttons
                 }
-                .padding(.top, 2)
+                .padding(.top, Theme.s(2))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.horizontal, Theme.s(16))
+        .padding(.vertical, Theme.s(14))
         .background(selected ? Theme.accentSoft : (hovering ? Theme.hover : .clear))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
@@ -303,7 +303,7 @@ struct ConversationRow: View {
     }
 
     @ViewBuilder private var buttons: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.s(6)) {
             if hovering {
                 PillButton(title: "Done", symbol: "checkmark", style: .ghost, compact: true) { store.setDone(item.message.id) }
             }
@@ -371,7 +371,7 @@ struct ConversationRow: View {
 
 private struct TightLabel: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 5) { configuration.icon.font(.system(size: 10)); configuration.title }
+        HStack(spacing: Theme.s(5)) { configuration.icon.font(Theme.font(size: 10)); configuration.title }
     }
 }
 
@@ -398,23 +398,23 @@ private struct AgendaView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.s(10)) {
             SectionHeader(title: "Timeline", subtitle: "Dates from your mail")
             if entries.isEmpty {
                 Text("Deadlines and dates Claude finds in your conversations will appear here.")
-                    .font(.system(size: 12.5)).foregroundStyle(Theme.text3)
-                    .padding(16).frame(maxWidth: .infinity, alignment: .leading).panel(radius: 12)
+                    .font(Theme.font(size: 12.5)).foregroundStyle(Theme.text3)
+                    .padding(Theme.s(16)).frame(maxWidth: .infinity, alignment: .leading).panel(radius: 12)
             } else {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: Theme.s(18)) {
                     ForEach(groups, id: \.0) { title, list in
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: Theme.s(12)) {
                             Text(title).font(Theme.micro).tracking(0.6).textCase(.uppercase)
                                 .foregroundStyle(title == "Overdue" ? Theme.urgent : Theme.text3)
                             ForEach(list) { e in row(e) }
                         }
                     }
                 }
-                .padding(16)
+                .padding(Theme.s(16))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .panel(radius: 12)
             }
@@ -422,16 +422,16 @@ private struct AgendaView: View {
     }
 
     private func row(_ e: AgendaEntry) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Theme.s(12)) {
             VStack(spacing: 0) {
-                Text(e.day.formatted(.dateTime.day())).font(.system(size: 15, weight: .regular).monospacedDigit()).foregroundStyle(Theme.text)
-                Text(e.day.formatted(.dateTime.weekday(.abbreviated))).font(.system(size: 9.5, weight: .medium)).textCase(.uppercase).foregroundStyle(Theme.text3)
+                Text(e.day.formatted(.dateTime.day())).font(Theme.font(size: 15, weight: .regular).monospacedDigit()).foregroundStyle(Theme.text)
+                Text(e.day.formatted(.dateTime.weekday(.abbreviated))).font(Theme.font(size: 9.5, weight: .medium)).textCase(.uppercase).foregroundStyle(Theme.text3)
             }
             .frame(width: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(e.text).font(.system(size: 13)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: Theme.s(2)) {
+                Text(e.text).font(Theme.font(size: 13)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
                 Text("\(e.item.conversation.counterpart.display) · \(e.item.conversation.subject)")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.text3).lineLimit(1)
+                    .font(Theme.font(size: 11.5)).foregroundStyle(Theme.text3).lineLimit(1)
             }
             Spacer(minLength: 0)
         }
@@ -445,21 +445,21 @@ private struct LowPriority: View {
     let items: [ConversationItem]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.s(10)) {
             SectionHeader(title: "Low priority", count: items.count)
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Theme.s(10)) {
                 let senders = Dictionary(grouping: items, by: { $0.conversation.counterpart.display }).sorted { $0.value.count > $1.value.count }.prefix(5)
                 ForEach(Array(senders), id: \.key) { name, list in
-                    HStack(spacing: 10) {
-                        Text(name).font(.system(size: 12.5)).foregroundStyle(Theme.text2).lineLimit(1)
+                    HStack(spacing: Theme.s(10)) {
+                        Text(name).font(Theme.font(size: 12.5)).foregroundStyle(Theme.text2).lineLimit(1)
                         Spacer()
-                        Text("\(list.count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.text3)
+                        Text("\(list.count)").font(Theme.font(size: 12).monospacedDigit()).foregroundStyle(Theme.text3)
                     }
                 }
                 PillButton(title: "Archive all", symbol: "archivebox", style: .secondary, compact: true) { store.archiveLowPriority() }
-                    .padding(.top, 2)
+                    .padding(.top, Theme.s(2))
             }
-            .padding(16)
+            .padding(Theme.s(16))
             .frame(maxWidth: .infinity, alignment: .leading)
             .panel(radius: 12)
         }

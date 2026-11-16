@@ -126,7 +126,7 @@ enum Snapshot {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.toolbarStyle = .unified
-        window.contentView = NSHostingView(rootView: view)
+        window.contentView = NSHostingView(rootView: view.themed())
         window.setContentSize(size)
         window.alphaValue = 0
         window.ignoresMouseEvents = true
