@@ -104,4 +104,44 @@ final class ParsingTests: XCTestCase {
     func testUIDSetCompression() {
         XCTAssertEqual(IMAPClient.uidSet([5, 1, 2, 3, 9, 10]), "1:3,5,9:10")
     }
+
+    func testHTMLMailThemedOrOriginal() {
+        var message = ParsedMessage()
+        message.html = "<html><head><style>.x{color:red}</style></head><body bgcolor=\"#fff\"><p class=\"x\">Hi</p></body></html>"
+        let css = ":root { --lb-text: rgba(1, 2, 3, 1); }"
+        let dark = EmailRecolor(background: EmailRecolor.rgb(0x161617), text: EmailRecolor.rgb(0xECECEC), dark: true)
+        let themed = MessageHTML.document(for: message, themeCSS: css, recolor: dark)
+        let original = MessageHTML.document(for: message, themeCSS: css, recolor: nil)
+        XCTAssertTrue(themed.contains(css))
+        XCTAssertTrue(themed.contains("bgcolor=\"#161617\""), "white page becomes the dark pane")
+        XCTAssertFalse(themed.contains(".x{color:red}"))
+        XCTAssertTrue(themed.contains("body:not(#lb)"))
+        XCTAssertTrue(themed.contains("<p class=\"x\">Hi</p>"))
+        // The theme rules come after the sender's own <style>, so they win ties.
+        XCTAssertLessThan(themed.range(of: ".x{color:")!.lowerBound, themed.range(of: "body:not(#lb)")!.lowerBound)
+        XCTAssertFalse(original.contains(css))
+        XCTAssertTrue(original.contains("color-scheme: light only"))
+
+        var plain = ParsedMessage()
+        plain.text = "Hello"
+        XCTAssertTrue(MessageHTML.document(for: plain, themeCSS: css, recolor: nil).contains(css))
+    }
+
+    func testEmailRecolorFollowsTheme() {
+        let dark = EmailRecolor(background: EmailRecolor.rgb(0x161617), text: EmailRecolor.rgb(0xECECEC), dark: true)
+        let light = EmailRecolor(background: EmailRecolor.rgb(0xFFFFFF), text: EmailRecolor.rgb(0x141414), dark: false)
+        func hex(_ r: EmailRecolor, _ s: String, _ role: EmailRecolor.Role = .surface) -> String {
+            EmailRecolor.format(r.map(EmailRecolor.parse(s, bareHex: false)!, role))
+        }
+        XCTAssertEqual(hex(dark, "#fff"), "#161617")
+        XCTAssertEqual(hex(dark, "black", .text), "#ececec")
+        XCTAssertEqual(hex(dark, "#000"), "#000000", "dark boxes stay dark")
+        XCTAssertEqual(hex(dark, "#fff", .text), "#ececed", "light text stays light")
+        XCTAssertEqual(hex(light, "#ffffff"), "#ffffff")
+        XCTAssertEqual(hex(light, "#336699"), "#336699", "a light theme on white changes almost nothing")
+        // Only color properties change; an id selector that looks like a color stays.
+        XCTAssertEqual(dark.recolorCSS("#fade { color: #000; width: 10px }"), "#fade { color: #ececec; width: 10px }")
+        XCTAssertEqual(dark.apply("<td style=\"background:rgba(255,255,255,0.5)\">"), "<td style=\"background:rgba(22, 22, 23, 0.5)\">")
+        XCTAssertEqual(EmailRecolor.parse("ffffff", bareHex: true), EmailRecolor.rgb(0xFFFFFF))
+    }
 }
