@@ -67,4 +67,18 @@ final class LiveServerTests: XCTestCase {
         XCTAssertTrue(greeting.hasPrefix("220"))
         s.close()
     }
+
+    /// IDLE relies on seeing that data is waiting on a TLS socket without blocking on a read.
+    func testWaitForDataOverTLS() async throws {
+        let s = MailSocket(host: "imap.gmail.com", port: 993, readTimeout: 15)
+        try await s.open(tls: true)
+        defer { s.close() }
+        _ = try await s.readLine()
+        let quiet = try await s.waitForData(timeout: 3)
+        XCTAssertFalse(quiet, "nothing was sent, so nothing should be waiting")
+        try await s.send("a1 CAPABILITY\r\n")
+        let answered = try await s.waitForData(timeout: 10)
+        XCTAssertTrue(answered, "the server's reply should be seen as waiting")
+        while !String(decoding: try await s.readLine(), as: UTF8.self).hasPrefix("a1 ") {}
+    }
 }

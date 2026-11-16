@@ -123,6 +123,29 @@ final class MailSocket: @unchecked Sendable {
         }
     }
 
+    /// Waits until there is something to read, without reading it. Returns false
+    /// when `timeout` passes first. Checks once a second, so it can be cancelled
+    /// and never trips the read watchdog. Used while an IMAP connection idles.
+    func waitForData(timeout: TimeInterval) async throws -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            let ready = try await run { () throws -> Bool in
+                if self.start < self.buffer.count { return true }
+                guard let r = self.input else { throw NetError.closed }
+                switch r.streamStatus {
+                case .atEnd, .closed, .error, .notOpen:
+                    throw r.streamError.map { NetError.connectionFailed($0.localizedDescription) } ?? NetError.closed
+                default:
+                    return r.hasBytesAvailable
+                }
+            }
+            if ready { return true }
+            let left = deadline.timeIntervalSinceNow
+            if left <= 0 { return false }
+            try await Task.sleep(for: .seconds(min(1, left)))
+        }
+    }
+
     func close() {
         queue.async { self.closeStreams() }
     }

@@ -85,6 +85,10 @@ final class IMAPClient: @unchecked Sendable {
             return try await body()
         } catch let error as IMAPError {
             throw error
+        } catch is CancellationError {
+            // The connection may be mid-command (e.g. idling); it can't be reused.
+            teardown()
+            throw CancellationError()
         } catch {
             teardown()
             try await openSession()
@@ -306,6 +310,60 @@ final class IMAPClient: @unchecked Sendable {
 
     func noop() async throws {
         try await serialized { _ = try await self.execute([.text("NOOP")]) }
+    }
+
+    /// True when the server can push mailbox changes (RFC 2177). Known after `connect()`.
+    var supportsIdle: Bool { capabilities.contains("IDLE") }
+
+    /// Selects `path` and waits in IDLE until the server reports a change or
+    /// `maxWait` passes. Returns true if the mailbox changed. Holds the connection
+    /// the whole time, so use a connection that does nothing else.
+    func idle(in path: String, maxWait: TimeInterval) async throws -> Bool {
+        try await serialized {
+            try await self.ensureSelected(path)
+            guard let stream = self.stream else { throw NetError.closed }
+            self.tagCounter += 1
+            let tag = "L\(self.tagCounter)"
+            let tagPrefix = Array((tag + " ").utf8)
+            try await stream.send(tag + " IDLE\r\n")
+
+            var changed = false
+            while true {
+                let resp = try await self.readResponse()
+                if resp.first == 0x2B { break }
+                if resp.starts(with: tagPrefix) {
+                    throw IMAPError(message: Self.serverMessage(resp, dropping: tagPrefix.count))
+                }
+                if Self.isMailboxChange(resp) { changed = true }
+            }
+
+            let deadline = Date().addingTimeInterval(maxWait)
+            while !changed {
+                let left = deadline.timeIntervalSinceNow
+                guard left > 0, try await stream.waitForData(timeout: left) else { break }
+                let resp = try await self.readResponse()
+                if resp.starts(with: Array("* BYE".utf8)) { throw NetError.closed }
+                if Self.isMailboxChange(resp) { changed = true }
+            }
+
+            try await stream.send("DONE\r\n")
+            while true {
+                let resp = try await self.readResponse()
+                if resp.starts(with: tagPrefix) {
+                    let rest = String(decoding: resp[tagPrefix.count...], as: UTF8.self)
+                    if rest.uppercased().hasPrefix("OK") { return changed }
+                    throw IMAPError(message: Self.serverMessage(resp, dropping: tagPrefix.count))
+                }
+                if Self.isMailboxChange(resp) { changed = true }
+            }
+        }
+    }
+
+    /// `* 12 EXISTS`, `* 3 EXPUNGE` or `* 5 FETCH (FLAGS …)`: something in the mailbox changed.
+    static func isMailboxChange(_ resp: [UInt8]) -> Bool {
+        let parts = String(decoding: resp.prefix(64), as: UTF8.self).split(separator: " ", maxSplits: 3)
+        guard parts.count >= 3, parts[0] == "*", Int(parts[1]) != nil else { return false }
+        return ["EXISTS", "EXPUNGE", "FETCH"].contains(parts[2].uppercased())
     }
 
     // MARK: Wire protocol

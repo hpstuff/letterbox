@@ -136,6 +136,12 @@ private struct ReadingSettings: View {
                 Text("Use “Show original” on a message to see it as the sender made it.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("New Mail") {
+                Toggle("Show a notification for new mail", isOn: $store.notifyNewMail)
+                Toggle("Show the unread count on the Dock icon", isOn: $store.dockBadge)
+                Text("Notifications appear when Letterbox is in the background. You can change their style in System Settings → Notifications.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Sending") {
                 Toggle("Save a copy of sent messages to Sent", isOn: $store.saveToSent)
                 VStack(alignment: .leading, spacing: 6) {

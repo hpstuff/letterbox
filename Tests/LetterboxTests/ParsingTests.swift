@@ -144,4 +144,16 @@ final class ParsingTests: XCTestCase {
         XCTAssertEqual(dark.apply("<td style=\"background:rgba(255,255,255,0.5)\">"), "<td style=\"background:rgba(22, 22, 23, 0.5)\">")
         XCTAssertEqual(EmailRecolor.parse("ffffff", bareHex: true), EmailRecolor.rgb(0xFFFFFF))
     }
+
+    func testIdleMailboxChanges() {
+        func change(_ s: String) -> Bool { IMAPClient.isMailboxChange(Array(s.utf8)) }
+        XCTAssertTrue(change("* 18 EXISTS"))
+        XCTAssertTrue(change("* 3 EXPUNGE"))
+        XCTAssertTrue(change("* 5 FETCH (FLAGS (\\Seen))"))
+        XCTAssertTrue(change("* 18 exists"))
+        XCTAssertFalse(change("* 2 RECENT"))
+        XCTAssertFalse(change("* OK Still here"))
+        XCTAssertFalse(change("+ idling"))
+        XCTAssertFalse(change("L4 OK IDLE terminated"))
+    }
 }
