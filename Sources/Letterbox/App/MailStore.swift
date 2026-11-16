@@ -179,6 +179,18 @@ final class MailStore {
     var themeHTMLMail = UserDefaults.standard.object(forKey: "themeHTMLMail") as? Bool ?? true {
         didSet { UserDefaults.standard.set(themeHTMLMail, forKey: "themeHTMLMail") }
     }
+    var notifyNewMail = UserDefaults.standard.object(forKey: "notifyNewMail") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(notifyNewMail, forKey: "notifyNewMail")
+            if notifyNewMail { NewMailNotifier.shared.requestPermissionIfWanted() }
+        }
+    }
+    var dockBadge = UserDefaults.standard.object(forKey: "dockBadge") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(dockBadge, forKey: "dockBadge")
+            updateDockBadge()
+        }
+    }
     var saveToSent = UserDefaults.standard.object(forKey: "saveToSent") as? Bool ?? true {
         didSet { UserDefaults.standard.set(saveToSent, forKey: "saveToSent") }
     }
@@ -193,6 +205,12 @@ final class MailStore {
     @ObservationIgnored private var bodyCacheOrder: [String] = []
     @ObservationIgnored private var bodyTask: Task<Void, Never>?
     @ObservationIgnored private var pollTask: Task<Void, Never>?
+    /// Per account: waits in IMAP IDLE on the inbox and syncs when the server reports a change.
+    @ObservationIgnored private var watchTasks: [String: Task<Void, Never>] = [:]
+    /// Accounts that were asked to sync while a sync was already running; they sync again after it.
+    @ObservationIgnored private var syncAgain: Set<String> = []
+    /// Keeps App Nap from slowing the mail checks while Letterbox is in the background.
+    @ObservationIgnored private var mailActivity: NSObjectProtocol?
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored private(set) var contacts: [MailAddress] = []
@@ -220,13 +238,19 @@ final class MailStore {
             sessions[acct.id] = AccountSession(account: acct, repo: repo, engine: SyncEngine(account: acct, password: password, repo: repo))
             accounts.append(acct)
         }
+        NewMailNotifier.shared.store = self
         if !accounts.isEmpty {
             loadFromCache()
             startSync()
         }
         setupAI()
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
+            Task { @MainActor in
+                // Connections made before sleep are usually dead; open fresh ones.
+                guard let self else { return }
+                for s in self.orderedSessions { self.startWatching(s) }
+                self.refresh()
+            }
         }
     }
 
@@ -368,6 +392,7 @@ final class MailStore {
             startSync()
         } else {
             loadFromCache()
+            startWatching(session)
             Task { await sync(session, full: true) }
         }
     }
@@ -378,6 +403,8 @@ final class MailStore {
         generation += 1
         triageTask?.cancel()
         triageTask = nil
+        watchTasks.removeValue(forKey: id)?.cancel()
+        syncAgain.remove(id)
         if let engine = s.engine { Task { await engine.shutdown() } }
         Keychain.deletePassword(for: s.account.email)
         s.repo.db.wipe()
@@ -390,6 +417,7 @@ final class MailStore {
 
         if accounts.isEmpty {
             pollTask?.cancel()
+            if let a = mailActivity { ProcessInfo.processInfo.endActivity(a); mailActivity = nil }
             Briefing.clear()
             briefing = nil
             folders = []
@@ -455,6 +483,12 @@ final class MailStore {
     private func reloadFolders() {
         for s in orderedSessions { s.folders = s.repo.folders() }
         folders = orderedSessions.flatMap(\.folders)
+        updateDockBadge()
+    }
+
+    private func updateDockBadge() {
+        guard !Snapshot.isActive else { return }
+        NewMailNotifier.shared.updateBadge(unread: folders.filter { $0.role == .inbox }.reduce(0) { $0 + $1.unread })
     }
 
     func reloadThreadInsights() {
@@ -615,6 +649,10 @@ final class MailStore {
     // MARK: Sync
 
     private func startSync() {
+        if mailActivity == nil {
+            mailActivity = ProcessInfo.processInfo.beginActivity(options: [.userInitiatedAllowingIdleSystemSleep], reason: "Checking for new mail")
+        }
+        for s in orderedSessions { startWatching(s) }
         pollTask?.cancel()
         pollTask = Task { [weak self] in
             await self?.syncAll(full: true)
@@ -631,6 +669,26 @@ final class MailStore {
         Task { await syncAll(full: true) }
     }
 
+    /// Starts (or restarts) push for one account. Servers without IDLE rely on the poll alone.
+    private func startWatching(_ s: AccountSession) {
+        watchTasks[s.id]?.cancel()
+        guard let engine = s.engine else { return }
+        let id = s.id
+        watchTasks[id] = Task { [weak self] in
+            // The first sync finds the inbox path; wait for it.
+            var path: String?
+            while path == nil, !Task.isCancelled {
+                path = self?.sessions[id]?.folder(.inbox)?.path
+                if path == nil { try? await Task.sleep(for: .seconds(5)) }
+            }
+            guard let path else { return }
+            await engine.watch(path) { [weak self] in
+                guard let self, let s = self.sessions[id] else { return }
+                await self.sync(s, full: false)
+            }
+        }
+    }
+
     /// Syncs every account at the same time.
     func syncAll(full: Bool) async {
         await withTaskGroup(of: Void.self) { group in
@@ -642,13 +700,26 @@ final class MailStore {
 
     func sync(_ s: AccountSession, full: Bool, extra: [String] = []) async {
         let id = s.id
-        guard let engine = s.engine, !syncingAccounts.contains(id) else { return }
-        syncingAccounts.insert(id)
-        defer {
-            syncingAccounts.remove(id)
-            if syncingAccounts.isEmpty { syncProgress = nil }
+        guard let engine = s.engine else { return }
+        guard !syncingAccounts.contains(id) else {
+            // The running sync may already be past the inbox; check again when it ends.
+            syncAgain.insert(id)
+            return
         }
+        syncingAccounts.insert(id)
         let alive = { [weak self] in self?.sessions[id] === s }
+        await runSync(s, engine: engine, full: full, extra: extra, alive: alive)
+        syncingAccounts.remove(id)
+        if syncingAccounts.isEmpty { syncProgress = nil }
+        if syncAgain.remove(id) != nil, alive() {
+            await sync(s, full: false)
+        }
+    }
+
+    private func runSync(_ s: AccountSession, engine: SyncEngine, full: Bool, extra: [String], alive: @escaping () -> Bool) async {
+        let id = s.id
+        var arrivals: [NewMailNotifier.Arrival] = []
+        defer { if alive() { postArrivals(arrivals, from: s) } }
         do {
             if full || s.folders.isEmpty {
                 try await engine.refreshFolders()
@@ -677,16 +748,30 @@ final class MailStore {
                 }
                 let isFirst = s.repo.uidRange(f.path) == nil
                 let name = multipleAccounts ? "\(f.displayName) (\(s.account.email))" : f.displayName
-                let changed = try await engine.syncFolder(f.path, initialWindow: window) { [weak self] done, total in
+                let result = try await engine.syncFolder(f.path, initialWindow: window) { [weak self] done, total in
                     guard let self, alive() else { return }
                     if isFirst { self.syncProgress = "Downloading \(name) — \(done) of \(total)" }
                     self.didUpdate(f)
                 }
-                if changed && alive() { didUpdate(f) }
+                if result.changed && alive() { didUpdate(f) }
+                if f.role == .inbox {
+                    let own = Set(accounts.map { $0.email.lowercased() })
+                    arrivals += result.arrived
+                        .filter { Self.worthNotifying($0) && !own.contains($0.from.first?.email.lowercased() ?? "") }
+                        .map {
+                            let from = $0.from.first
+                            let sender = (from?.name.isEmpty == false ? from?.name : from?.email) ?? "Unknown Sender"
+                            let subject = $0.subject.trimmingCharacters(in: .whitespaces)
+                            return NewMailNotifier.Arrival(account: id, accountEmail: s.account.email, folder: f.path, uid: $0.uid,
+                                                           sender: sender, subject: subject.isEmpty ? "(No Subject)" : subject)
+                        }
+                }
             }
             guard alive() else { return }
             refreshCounts()
             rebuildConversations()
+            postArrivals(arrivals, from: s)
+            arrivals = []
             await detectAliases(s)
             guard alive() else { return }
             if let inbox = s.folder(.inbox) {
@@ -705,6 +790,30 @@ final class MailStore {
         } catch {
             if alive() { syncErrors[id] = Self.friendly(error) }
         }
+    }
+
+    /// Unread and recent. Mail that came in days ago (Letterbox was closed) doesn't pop up.
+    private static func worthNotifying(_ m: FetchedSummary) -> Bool {
+        !m.flags.contains("\\seen") && m.date > Date().addingTimeInterval(-86400)
+    }
+
+    private func postArrivals(_ arrivals: [NewMailNotifier.Arrival], from s: AccountSession) {
+        // Anything read on another device while we synced shouldn't pop up.
+        let fresh = arrivals.filter { a in s.repo.message(folder: a.folder, uid: a.uid).map { !$0.seen } ?? false }
+        NewMailNotifier.shared.notify(fresh, showAccount: multipleAccounts)
+    }
+
+    /// Shows one message in the inbox, e.g. after its notification is clicked.
+    func showMessage(account: String, folder: String, uid: UInt32) {
+        guard let s = sessions[account], var m = s.repo.message(folder: folder, uid: uid) else {
+            sidebarSelection = .mailbox(.inbox)
+            return
+        }
+        m.account = account
+        searchText = ""
+        sidebarSelection = .mailbox(.inbox)
+        knownMessages[m.id] = m
+        selection = [m.id]
     }
 
     static func friendly(_ error: Error) -> String {
@@ -730,6 +839,7 @@ final class MailStore {
 
     private func open(_ m: MessageSummary) {
         openedID = m.id
+        NewMailNotifier.shared.withdraw(account: m.account, folder: m.folder, uids: [m.uid])
         bodyTask?.cancel()
         if let cached = bodyCache[m.id] {
             bodyState = .loaded(cached)

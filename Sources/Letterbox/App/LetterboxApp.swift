@@ -43,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         AppearanceSettings.shared.applyMode()
+        NewMailNotifier.shared.start()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }

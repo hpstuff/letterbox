@@ -9,6 +9,8 @@ final class SyncEngine: @unchecked Sendable {
     let repo: MailRepository
     private let background: IMAPClient
     private let interactive: IMAPClient
+    /// A third connection that only waits in IDLE, so new mail shows up at once.
+    private let watcher: IMAPClient
 
     init(account: Account, password: String, repo: MailRepository) {
         self.account = account
@@ -16,6 +18,7 @@ final class SyncEngine: @unchecked Sendable {
         self.repo = repo
         background = IMAPClient(host: account.imapHost, port: account.imapPort, security: account.imapSecurity, username: account.loginName, password: password)
         interactive = IMAPClient(host: account.imapHost, port: account.imapPort, security: account.imapSecurity, username: account.loginName, password: password)
+        watcher = IMAPClient(host: account.imapHost, port: account.imapPort, security: account.imapSecurity, username: account.loginName, password: password)
     }
 
     func connect() async throws {
@@ -25,6 +28,29 @@ final class SyncEngine: @unchecked Sendable {
     func shutdown() async {
         await background.disconnect()
         await interactive.disconnect()
+        await watcher.disconnect()
+    }
+
+    // MARK: Push
+
+    /// Waits for the server to report changes in `path` and calls `onChange` each time.
+    /// Runs until the task is cancelled. Returns at once if the server has no IDLE;
+    /// the regular poll then is the only way new mail arrives.
+    func watch(_ path: String, onChange: @escaping @MainActor () async -> Void) async {
+        var delay = 5
+        while !Task.isCancelled {
+            do {
+                try await watcher.connect()
+                guard watcher.supportsIdle else { return }
+                // Servers may drop an idle connection after 30 minutes; start over well before that.
+                if try await watcher.idle(in: path, maxWait: 9 * 60) { await onChange() }
+                delay = 5
+            } catch {
+                if Task.isCancelled { return }
+                try? await Task.sleep(for: .seconds(delay))
+                delay = min(delay * 2, 300)
+            }
+        }
     }
 
     // MARK: Folder sync
@@ -39,12 +65,19 @@ final class SyncEngine: @unchecked Sendable {
         }
     }
 
-    /// Returns true if anything changed locally.
+    struct FolderSync {
+        /// True if anything changed locally.
+        var changed = false
+        /// Messages that arrived since the last sync. Empty on a folder's first sync.
+        var arrived: [FetchedSummary] = []
+    }
+
     @discardableResult
-    func syncFolder(_ path: String, initialWindow: Int, progress: @escaping (Int, Int) async -> Void) async throws -> Bool {
+    func syncFolder(_ path: String, initialWindow: Int, progress: @escaping (Int, Int) async -> Void) async throws -> FolderSync {
         let info = try await background.select(path)
         let state = repo.folderState(path)
         var changed = false
+        var arrived: [FetchedSummary] = []
 
         if state.uidValidity != 0 && state.uidValidity != info.uidValidity {
             repo.clearFolder(path)
@@ -57,6 +90,7 @@ final class SyncEngine: @unchecked Sendable {
                     .filter { $0.uid > range.max }
                 if !fresh.isEmpty {
                     repo.upsert(fresh, folder: path)
+                    arrived = fresh
                     changed = true
                     await progress(fresh.count, fresh.count)
                 }
@@ -95,7 +129,7 @@ final class SyncEngine: @unchecked Sendable {
         repo.updateFolderState(path, uidValidity: info.uidValidity, uidNext: info.uidNext, total: info.exists)
         let unseen = (try? await background.searchUIDs(in: path, criteria: "UNSEEN").count) ?? repo.unreadCount(path)
         repo.updateCounts(path, total: info.exists, unread: unseen)
-        return changed
+        return FolderSync(changed: changed, arrived: arrived)
     }
 
     /// Downloads recent message bodies so they open instantly and get previews.

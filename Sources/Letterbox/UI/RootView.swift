@@ -13,6 +13,9 @@ struct RootView: View {
                 MainShell()
             }
         }
+        .onAppear {
+            NewMailNotifier.shared.openMainWindow = { [openWindow] in openWindow(id: "main") }
+        }
         .onChange(of: store.pendingCompose) { _, id in
             guard let id else { return }
             openWindow(id: "compose", value: id)
