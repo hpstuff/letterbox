@@ -22,8 +22,8 @@ screenshots: app  ## Regenerate docs/screenshots from built-in demo data
 	for f in build/shots/*.png; do sips -Z 2200 "$$f" --out docs/screenshots/ >/dev/null; done
 
 icon:             ## Regenerate the app icon
-	rm -rf build/AppIcon.iconset build/AppIcon.icns
-	swift scripts/make-icon.swift build/AppIcon.iconset docs/icon.png
+	rm -rf build/icon
+	swift scripts/make-icon.swift build/icon docs/icon.png docs/icon-dark.png
 
 dist:             ## Universal, zipped release build
 	UNIVERSAL=1 scripts/build-app.sh

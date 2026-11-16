@@ -23,11 +23,23 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/Letterbox" "$APP/Contents/MacOS/Letterbox"
 
-if [[ ! -f build/AppIcon.icns ]]; then
-  swift scripts/make-icon.swift build/AppIcon.iconset
-  iconutil -c icns build/AppIcon.iconset -o build/AppIcon.icns
+# Icon: light and dark looks from the Icon Composer file when Xcode 26+ is here (macOS 26 picks
+# one by the system appearance), else the flat light icon.
+ICON_NAME_KEY=""
+if [[ ! -d build/icon ]]; then
+  swift scripts/make-icon.swift build/icon
 fi
-cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+rm -rf build/icon/compiled && mkdir -p build/icon/compiled
+if xcrun actool build/icon/AppIcon.icon --compile build/icon/compiled --platform macosx \
+     --minimum-deployment-target 15.0 --app-icon AppIcon \
+     --output-partial-info-plist build/icon/compiled/partial.plist >/dev/null 2>&1 \
+   && [[ -f build/icon/compiled/Assets.car ]]; then
+  cp build/icon/compiled/Assets.car build/icon/compiled/AppIcon.icns "$APP/Contents/Resources/"
+  ICON_NAME_KEY="<key>CFBundleIconName</key><string>AppIcon</string>"
+else
+  echo "Note: no Xcode 26 asset compiler, so the app gets the light icon only."
+  iconutil -c icns build/icon/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
+fi
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -39,6 +51,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key><string>io.github.mr-vero.letterbox</string>
   <key>CFBundleExecutable</key><string>Letterbox</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
+  ${ICON_NAME_KEY}
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundleVersion</key><string>${BUILD_NUMBER}</string>
