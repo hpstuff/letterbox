@@ -69,7 +69,7 @@ final class MailRepository: @unchecked Sendable {
                 db.writer.run("DELETE FROM messages WHERE folder = ?", [.text(gone)])
                 db.writer.run("DELETE FROM bodies WHERE folder = ?", [.text(gone)])
             }
-            for f in remote {
+            for (f, role) in zip(remote, FolderRole.detect(remote)) {
                 let virtual = f.attributes.contains("\\flagged") || f.attributes.contains("\\important")
                 let selectable = !virtual && !f.attributes.contains("\\noselect") && !f.attributes.contains("\\nonexistent")
                 var name = ModifiedUTF7.decode(f.path)
@@ -79,7 +79,7 @@ final class MailRepository: @unchecked Sendable {
                 db.writer.run("""
                 INSERT INTO folders(path, name, delimiter, role, selectable) VALUES(?,?,?,?,?)
                 ON CONFLICT(path) DO UPDATE SET name=excluded.name, delimiter=excluded.delimiter, role=excluded.role, selectable=excluded.selectable
-                """, [.text(f.path), .text(name), .of(f.delimiter), .text(FolderRole.detect(path: f.path, attributes: f.attributes).rawValue), .of(selectable)])
+                """, [.text(f.path), .text(name), .of(f.delimiter), .text(role.rawValue), .of(selectable)])
             }
         }
     }

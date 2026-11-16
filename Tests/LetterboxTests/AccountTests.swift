@@ -57,4 +57,30 @@ final class AccountTests: XCTestCase {
         XCTAssertEqual(a.key, "x@y", "Stored insight keys stay the same as before multiple accounts")
         XCTAssertEqual(a.key, b.key)
     }
+
+    func testGmailAndNestedFoldersGetPlainNamesThatMatchAcrossAccounts() {
+        let dir = FileManager.default.temporaryDirectory
+        let gmail = MailRepository(db: Database(url: dir.appendingPathComponent("lb-g-\(UUID()).sqlite")), accountID: "G")
+        gmail.replaceFolders([RemoteFolder(path: "INBOX", delimiter: "/", attributes: []),
+                              RemoteFolder(path: "[Gmail]/Drafts", delimiter: "/", attributes: ["\\drafts"]),
+                              RemoteFolder(path: "[Gmail]/Sent Mail", delimiter: "/", attributes: ["\\sent"]),
+                              RemoteFolder(path: "[Gmail]/Bin", delimiter: "/", attributes: ["\\trash"]),
+                              RemoteFolder(path: "Drafts", delimiter: "/", attributes: []),
+                              RemoteFolder(path: "Blocked", delimiter: "/", attributes: [])])
+        let other = MailRepository(db: Database(url: dir.appendingPathComponent("lb-o-\(UUID()).sqlite")), accountID: "O")
+        other.replaceFolders([RemoteFolder(path: "INBOX", delimiter: ".", attributes: []),
+                              RemoteFolder(path: "INBOX.Junk", delimiter: ".", attributes: []),
+                              RemoteFolder(path: "INBOX.Blocked", delimiter: ".", attributes: [])])
+
+        let g = Dictionary(uniqueKeysWithValues: gmail.folders().map { ($0.path, $0) })
+        XCTAssertEqual(g["[Gmail]/Drafts"]?.role, .drafts)
+        XCTAssertEqual(g["[Gmail]/Drafts"]?.displayName, "Drafts")
+        XCTAssertEqual(g["[Gmail]/Sent Mail"]?.displayName, "Sent Mail")
+        XCTAssertEqual(g["[Gmail]/Bin"]?.displayName, "Bin")
+        XCTAssertEqual(g["Drafts"]?.role, .custom, "A label named Drafts must not compete with the real drafts mailbox")
+
+        let o = Dictionary(uniqueKeysWithValues: other.folders().map { ($0.path, $0) })
+        XCTAssertEqual(o["INBOX.Junk"]?.role, .junk)
+        XCTAssertEqual(o["INBOX.Blocked"]?.displayName, g["Blocked"]?.displayName, "Same folder in two accounts shares one sidebar row")
+    }
 }
