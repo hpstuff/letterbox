@@ -46,9 +46,7 @@ struct MessageListPane: View {
                 Text(store.subtitle).font(Theme.font(size: 12)).foregroundStyle(Theme.text3)
             }
             Spacer()
-            IconButton(symbol: "arrow.clockwise", help: "Check for new mail (⇧⌘N)") { store.refresh() }
-                .rotationEffect(.degrees(store.isSyncing ? 360 : 0))
-                .animation(store.isSyncing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: store.isSyncing)
+            IconButton(symbol: "arrow.clockwise", help: "Check for new mail (⇧⌘N)", spinning: store.isSyncing) { store.refresh() }
         }
         .padding(.horizontal, Theme.s(18))
         .padding(.top, Theme.s(20))
