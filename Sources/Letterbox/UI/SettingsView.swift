@@ -4,7 +4,7 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             AccountSettings()
-                .tabItem { Label("Account", systemImage: "person.crop.circle") }
+                .tabItem { Label("Accounts", systemImage: "person.crop.circle") }
             AppearanceSettingsView()
                 .tabItem { Label("Appearance", systemImage: "paintpalette") }
             ClaudeSettings()
@@ -20,90 +20,107 @@ struct SettingsView: View {
 
 private struct AccountSettings: View {
     @Environment(MailStore.self) private var store
-    @State private var name = ""
-    @State private var confirmSignOut = false
+    @Environment(\.openWindow) private var openWindow
+    @State private var removing: Account?
 
     var body: some View {
         Form {
-            if let account = store.account {
-                Section {
-                    LabeledContent("Email", value: account.email)
-                    TextField("Display name", text: $name)
-                        .onSubmit { store.updateDisplayName(name) }
-                        .onChange(of: name) { _, v in store.updateDisplayName(v) }
-                }
-                Section("Servers") {
-                    LabeledContent("Incoming", value: "\(account.imapHost):\(account.imapPort) · \(account.imapSecurity.rawValue)")
-                    LabeledContent("Outgoing", value: "\(account.smtpHost):\(account.smtpPort) · \(account.smtpSecurity.rawValue)")
-                }
-                Section {
-                    Button("Sign Out…", role: .destructive) { confirmSignOut = true }
-                }
-            } else {
+            if store.accounts.isEmpty {
                 Text("Not signed in.").foregroundStyle(.secondary)
+            } else {
+                ForEach(store.accounts) { account in
+                    Section(account.email) {
+                        TextField("Display name", text: Binding(
+                            get: { store.accounts.first { $0.id == account.id }?.displayName ?? "" },
+                            set: { store.updateDisplayName($0, for: account.id) }
+                        ))
+                        TextField("Name in sidebar", text: Binding(
+                            get: { store.accounts.first { $0.id == account.id }?.nickname ?? "" },
+                            set: { store.updateNickname($0, for: account.id) }
+                        ), prompt: Text(MailStore.defaultNickname(account)))
+                        LabeledContent("Incoming", value: "\(account.imapHost):\(account.imapPort) · \(account.imapSecurity.rawValue)")
+                        LabeledContent("Outgoing", value: "\(account.smtpHost):\(account.smtpPort) · \(account.smtpSecurity.rawValue)")
+                        HStack {
+                            Spacer()
+                            Button("Remove Account…", role: .destructive) { removing = account }
+                        }
+                    }
+                }
+                Section {
+                    Button("Add Account…") {
+                        openWindow(id: "main")
+                        store.addingAccount = true
+                    }
+                } footer: {
+                    Text("Mail from all accounts is shown together. Each account keeps its own folders and addresses, and replies go out from the account that received the message.")
+                }
             }
         }
         .formStyle(.grouped)
-        .onAppear { name = store.account?.displayName ?? "" }
-        .confirmationDialog("Sign out of Letterbox?", isPresented: $confirmSignOut) {
-            Button("Sign Out", role: .destructive) { store.signOut() }
-        } message: {
-            Text("Your password and downloaded mail will be removed from this Mac. Nothing on the server is changed.")
+        .confirmationDialog("Remove \(removing?.email ?? "this account") from Letterbox?", isPresented: Binding(
+            get: { removing != nil },
+            set: { if !$0 { removing = nil } }
+        ), presenting: removing) { a in
+            Button("Remove Account", role: .destructive) { store.removeAccount(a.id) }
+        } message: { _ in
+            Text("Its password and downloaded mail will be removed from this Mac. Nothing on the server is changed.")
         }
     }
 }
 
 private struct AliasSettings: View {
     @Environment(MailStore.self) private var store
-    @State private var newAlias = ""
+    @State private var newAlias: [String: String] = [:]
 
     var body: some View {
         Form {
-            Section {
-                ForEach(store.addresses) { a in
-                    HStack {
-                        Image(systemName: a.isPrimary ? "person.crop.circle" : "at").foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(a.email)
-                            Text(a.isPrimary ? "Primary" : (a.isManual ? "Added by you" : "Detected from your mail"))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if !a.isPrimary {
-                            Button("Hide") { store.setAlias(a.email, hidden: true) }
+            ForEach(store.accounts) { account in
+                Section {
+                    ForEach(store.addresses(in: account.id)) { a in
+                        HStack {
+                            Image(systemName: a.isPrimary ? "person.crop.circle" : "at").foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(a.email)
+                                Text(a.isPrimary ? "Primary" : (a.isManual ? "Added by you" : "Detected from your mail"))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if !a.isPrimary {
+                                Button("Hide") { store.setAlias(a.email, hidden: true) }
+                            }
                         }
                     }
-                }
-            } header: {
-                Text("Your addresses")
-            } footer: {
-                Text("Replies are sent from the address a message was delivered to. Choose any of these in the From menu when writing.")
-            }
-            if !store.hiddenAliases.isEmpty {
-                Section("Hidden") {
-                    ForEach(store.hiddenAliases) { a in
+                    let hidden = store.hiddenAliases.filter { $0.account == account.id }
+                    ForEach(hidden) { a in
                         HStack {
                             Text(a.email).foregroundStyle(.secondary)
                             Spacer()
                             Button("Show") { store.setAlias(a.email, hidden: false) }
                         }
                     }
+                    HStack {
+                        TextField("Add an alias: alias@example.com", text: binding(for: account.id))
+                            .onSubmit { add(account.id) }
+                        Button("Add") { add(account.id) }.disabled(!(newAlias[account.id] ?? "").contains("@"))
+                    }
+                } header: {
+                    Text(store.multipleAccounts ? account.email : "Your addresses")
                 }
             }
-            Section("Add an alias") {
-                HStack {
-                    TextField("alias@example.com", text: $newAlias)
-                        .onSubmit(add)
-                    Button("Add", action: add).disabled(!newAlias.contains("@"))
-                }
+            Section {} footer: {
+                Text("Replies are sent from the address a message was delivered to. Choose any of these in the From menu when writing.")
             }
         }
         .formStyle(.grouped)
     }
 
-    private func add() {
-        store.addAlias(newAlias)
-        newAlias = ""
+    private func binding(for id: String) -> Binding<String> {
+        Binding(get: { newAlias[id] ?? "" }, set: { newAlias[id] = $0 })
+    }
+
+    private func add(_ id: String) {
+        store.addAlias(newAlias[id] ?? "", to: id)
+        newAlias[id] = ""
     }
 }
 

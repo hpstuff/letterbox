@@ -104,11 +104,11 @@ struct ComposeView: View {
     private var fromRow: some View {
         FieldRow(label: "From") {
             Menu {
-                ForEach(store.addresses) { a in
+                ForEach(store.fromAddresses, id: \.self) { email in
                     Button {
-                        draft.fromEmail = a.email
+                        draft.fromEmail = email
                     } label: {
-                        if a.email == draft.fromEmail { Label(a.email, systemImage: "checkmark") } else { Text(a.email) }
+                        if email == draft.fromEmail.lowercased() { Label(email, systemImage: "checkmark") } else { Text(email) }
                     }
                 }
             } label: {
@@ -123,8 +123,7 @@ struct ComposeView: View {
     }
 
     private var fromLabel: String {
-        let alias = store.addresses.first { $0.email == draft.fromEmail.lowercased() }
-        let name = (alias?.name.isEmpty == false ? alias!.name : store.account?.displayName) ?? ""
+        let name = store.senderName(for: draft.fromEmail)
         return name.isEmpty ? draft.fromEmail : "\(name) <\(draft.fromEmail)>"
     }
 

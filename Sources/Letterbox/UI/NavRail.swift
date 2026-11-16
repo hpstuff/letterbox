@@ -3,7 +3,10 @@ import SwiftUI
 struct NavRail: View {
     @Environment(MailStore.self) private var store
     @State private var addingAlias = false
+    @State private var aliasAccount = ""
     @State private var newAlias = ""
+    @State private var customizing = false
+    @AppStorage("sidebarMoreExpanded") private var moreExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -20,44 +23,20 @@ struct NavRail: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: Theme.s(2)) {
+                    let groups = store.sidebarGroups
+                    let shown = groups.filter { store.isShown($0) }
+                    let hidden = groups.filter { !store.isShown($0) }
                     NavItem(title: "Dashboard", symbol: "square.grid.2x2", item: .dashboard, badge: store.dashboard.needsReply.count)
+                        .padding(.leading, gutter)
                     sectionLabel("Mailboxes")
-                    ForEach(store.mailboxFolders) { f in
-                        folderItem(f)
-                        if f.role == .inbox {
-                            NavItem(title: "Flagged", symbol: "flag", item: .flagged, badge: store.flaggedCount, quietBadge: true)
-                        }
-                    }
-                    HStack {
-                        sectionLabel("Addresses")
-                        Spacer()
-                        Button { addingAlias = true } label: {
-                            Image(systemName: "plus").font(Theme.font(size: 10, weight: .bold)).foregroundStyle(Theme.text3)
-                                .frame(width: 20, height: 20)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.top, Theme.s(14))
-                        .help("Add an alias")
-                        .popover(isPresented: $addingAlias, arrowEdge: .trailing) { aliasPopover }
-                    }
-                    ForEach(store.addresses) { a in
-                        NavItem(title: a.email, symbol: a.isPrimary ? "person.crop.circle" : "at", item: .address(a.email), badge: a.unread, quietBadge: true, mono: true)
-                            .contextMenu {
-                                Button("New Message from This Address") { store.newMessage(from: a.email) }
-                                Button("Copy Address") {
-                                    NSPasteboard.general.clearContents()
-                                    NSPasteboard.general.setString(a.email, forType: .string)
-                                }
-                                if !a.isPrimary {
-                                    Divider()
-                                    Button("Hide Alias") { store.setAlias(a.email, hidden: true) }
-                                }
-                            }
-                    }
-                    if !store.customFolders.isEmpty {
+                    ForEach(shown.filter { !$0.isCustom }) { groupRows($0) }
+                    let shownFolders = shown.filter(\.isCustom)
+                    if !shownFolders.isEmpty {
                         sectionLabel("Folders")
-                        ForEach(store.customFolders) { folderItem($0) }
+                        ForEach(shownFolders) { groupRows($0) }
                     }
+                    moreSection(hidden)
+                    addressesSection
                 }
                 .padding(.bottom, Theme.s(12))
             }
@@ -72,6 +51,9 @@ struct NavRail: View {
             if Theme.isGlass { GlassSidebarBackground().ignoresSafeArea() } else { Theme.rail }
         }
     }
+
+    /// Room for the open/close arrows, only needed when groups can open into accounts.
+    private var gutter: CGFloat { store.multipleAccounts ? 16 : 0 }
 
     private var brand: some View {
         HStack(spacing: Theme.s(10)) {
@@ -92,17 +74,137 @@ struct NavRail: View {
         Text(s).microLabel().padding(.leading, Theme.s(10)).padding(.top, Theme.s(16)).padding(.bottom, Theme.s(5))
     }
 
-    private func folderItem(_ f: Folder) -> some View {
-        let badge: Int = switch f.role {
-        case .inbox, .archive, .custom: f.unread
-        case .drafts: f.total
-        default: 0
-        }
-        return NavItem(title: f.displayName, symbol: f.role.symbol, item: .folder(f.path), badge: badge, quietBadge: f.role != .inbox)
-            .dropDestination(for: String.self) { ids, _ in
-                store.move(ids, to: f.path)
-                return true
+    // MARK: Groups
+
+    /// A mailbox or folder name across accounts; opens into one row per account.
+    @ViewBuilder private func groupRows(_ g: SidebarGroup) -> some View {
+        let expandable = store.canExpand(g)
+        let expanded = expandable && store.sidebarExpanded.contains(g.key)
+        HStack(spacing: 0) {
+            if store.multipleAccounts {
+                Button { withAnimation(.snappy(duration: 0.2)) { store.toggleExpanded(g) } } label: {
+                    Image(systemName: "chevron.right")
+                        .font(Theme.font(size: 8.5, weight: .bold))
+                        .foregroundStyle(Theme.text3)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                        .frame(width: gutter, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .opacity(expandable ? 1 : 0)
+                .disabled(!expandable)
+                .help(expanded ? "Hide accounts" : "Show each account")
             }
+            NavItem(title: g.title, symbol: g.symbol, item: g.item, badge: g.badge, quietBadge: g.quietBadge)
+                .dropDestination(for: String.self) { ids, _ in drop(ids, on: g) }
+                .help(store.multipleAccounts && g.isCustom && g.folders.count == 1 ? store.accountName(g.folders[0].account) : "")
+                .contextMenu {
+                    if store.isShown(g) {
+                        Button("Hide from Sidebar") { withAnimation(.snappy(duration: 0.2)) { store.setShown(g, false) } }
+                    } else {
+                        Button("Show in Sidebar") { withAnimation(.snappy(duration: 0.2)) { store.setShown(g, true) } }
+                    }
+                    Button("Customize Sidebar…") { customizing = true }
+                }
+        }
+        if expanded {
+            ForEach(g.folders) { f in
+                NavItem(title: store.accountName(f.account), symbol: g.symbol, item: .folder(f.id), badge: store.badge(for: f),
+                        quietBadge: f.role != .inbox, mark: AccountMark(name: store.session(f.account)?.account.displayName ?? "",
+                                                                         email: store.session(f.account)?.account.email ?? "",
+                                                                         color: store.accountColor(f.account)))
+                    .padding(.leading, gutter + 12)
+                    .help(store.session(f.account)?.account.email ?? "")
+                    .dropDestination(for: String.self) { ids, _ in
+                        store.move(ids, to: f)
+                        return true
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func drop(_ ids: [String], on g: SidebarGroup) -> Bool {
+        switch g.kind {
+        case .role(let role): store.move(ids, toRole: role)
+        case .flagged: store.toggleFlag(ids)
+        case .custom(let name): store.move(ids, toFolderNamed: name)
+        }
+        return true
+    }
+
+    /// Everything the user hasn't pinned to the sidebar, plus the way to choose.
+    @ViewBuilder private func moreSection(_ hidden: [SidebarGroup]) -> some View {
+        HStack(spacing: 0) {
+            Color.clear.frame(width: gutter)
+            Button { withAnimation(.snappy(duration: 0.2)) { moreExpanded.toggle() } } label: {
+                HStack(spacing: Theme.s(10)) {
+                    Image(systemName: "ellipsis.circle").font(Theme.font(size: 13, weight: .medium)).foregroundStyle(Theme.text2).frame(width: 18)
+                    Text(moreExpanded ? "Less" : "More").font(Theme.font(size: 13, weight: .medium)).foregroundStyle(Theme.text2)
+                    Spacer(minLength: 4)
+                    if !moreExpanded && !hidden.isEmpty {
+                        Text("\(hidden.count)").font(Theme.font(size: 10.5, weight: .bold).monospacedDigit()).foregroundStyle(Theme.text3)
+                            .padding(.horizontal, Theme.s(2))
+                    }
+                    Image(systemName: "chevron.down").font(Theme.font(size: 8.5, weight: .bold)).foregroundStyle(Theme.text3)
+                        .rotationEffect(.degrees(moreExpanded ? 180 : 0))
+                }
+                .padding(.horizontal, Theme.s(10))
+                .frame(height: 32)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Folders you haven’t added to the sidebar")
+        }
+        .padding(.top, Theme.s(6))
+        .popover(isPresented: $customizing, arrowEdge: .trailing) { SidebarCustomizer() }
+        if moreExpanded {
+            ForEach(hidden) { groupRows($0) }
+            HStack(spacing: 0) {
+                Color.clear.frame(width: gutter)
+                Button { customizing = true } label: {
+                    Text("Customize Sidebar…")
+                        .font(Theme.font(size: 12, weight: .medium)).foregroundStyle(Theme.text3)
+                        .padding(.horizontal, Theme.s(10)).frame(height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: Addresses
+
+    @ViewBuilder private var addressesSection: some View {
+        HStack {
+            sectionLabel("Addresses")
+            Spacer()
+            Button {
+                aliasAccount = store.account?.id ?? ""
+                addingAlias = true
+            } label: {
+                Image(systemName: "plus").font(Theme.font(size: 10, weight: .bold)).foregroundStyle(Theme.text3)
+                    .frame(width: 20, height: 20)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, Theme.s(14))
+            .help("Add an alias")
+            .popover(isPresented: $addingAlias, arrowEdge: .trailing) { aliasPopover }
+        }
+        ForEach(store.addresses) { alias in
+            NavItem(title: alias.email, symbol: alias.isPrimary ? "person.crop.circle" : "at", item: .address(alias.email), badge: alias.unread, quietBadge: true, mono: true)
+                .contextMenu {
+                    Button("New Message from This Address") { store.newMessage(from: alias.email) }
+                    Button("Copy Address") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(alias.email, forType: .string)
+                    }
+                    if !alias.isPrimary {
+                        Divider()
+                        Button("Hide Alias") { store.setAlias(alias.email, hidden: true) }
+                    }
+                }
+        }
     }
 
     private var aliasPopover: some View {
@@ -110,6 +212,11 @@ struct NavRail: View {
             Text("Add an alias").font(.headline)
             Text("Letterbox detects aliases from your mail automatically. Add one here if it hasn’t received anything yet.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if store.multipleAccounts {
+                Picker("Account", selection: $aliasAccount) {
+                    ForEach(store.accounts) { Text($0.email).tag($0.id) }
+                }
+            }
             TextField("alias@example.com", text: $newAlias).textFieldStyle(.roundedBorder).onSubmit(commitAlias)
             HStack {
                 Spacer()
@@ -118,14 +225,56 @@ struct NavRail: View {
             }
         }
         .padding(Theme.s(16))
-        .frame(width: 280)
+        .frame(width: 300)
     }
 
     private func commitAlias() {
         guard newAlias.contains("@") else { return }
-        store.addAlias(newAlias)
+        store.addAlias(newAlias, to: aliasAccount)
         newAlias = ""
         addingAlias = false
+    }
+}
+
+/// Checkboxes for every mailbox and folder: checked ones sit in the sidebar, the rest under More.
+private struct SidebarCustomizer: View {
+    @Environment(MailStore.self) private var store
+
+    var body: some View {
+        let groups = store.sidebarGroups
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Show in Sidebar").font(.headline).padding(.bottom, Theme.s(4))
+            Text("Unchecked items stay under More.").font(.caption).foregroundStyle(.secondary).padding(.bottom, Theme.s(10))
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.s(6)) {
+                    Text("Mailboxes").microLabel().padding(.top, Theme.s(2))
+                    ForEach(groups.filter { !$0.isCustom }) { row($0) }
+                    let custom = groups.filter(\.isCustom)
+                    if !custom.isEmpty {
+                        Text("Folders").microLabel().padding(.top, Theme.s(10))
+                        ForEach(custom) { row($0) }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 420)
+        }
+        .padding(Theme.s(16))
+        .frame(width: 300)
+    }
+
+    private func row(_ g: SidebarGroup) -> some View {
+        Toggle(isOn: Binding(get: { store.isShown(g) }, set: { v in withAnimation(.snappy(duration: 0.2)) { store.setShown(g, v) } })) {
+            HStack(spacing: Theme.s(8)) {
+                Image(systemName: g.symbol).foregroundStyle(.secondary).frame(width: 16)
+                Text(g.title).lineLimit(1)
+                if store.multipleAccounts && g.isCustom {
+                    Text(g.folders.map { store.accountName($0.account) }.joined(separator: ", "))
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+        }
+        .toggleStyle(.checkbox)
     }
 }
 
@@ -138,6 +287,8 @@ private struct NavItem: View {
     var quietBadge = false
     var ai = false
     var mono = false
+    /// Shown instead of the symbol, for a per-account row.
+    var mark: AccountMark?
     @State private var hovering = false
 
     private var selected: Bool { store.sidebarSelection == item && store.searchText.isEmpty }
@@ -149,7 +300,9 @@ private struct NavItem: View {
         } label: {
             HStack(spacing: Theme.s(10)) {
                 Group {
-                    if ai {
+                    if let mark {
+                        mark
+                    } else if ai {
                         Image(systemName: symbol).foregroundStyle(Theme.aurora)
                     } else {
                         Image(systemName: selected && symbol != "at" ? symbol + ".fill" : symbol)
@@ -238,15 +391,25 @@ private struct ClaudeStatusCard: View {
 private struct AccountRow: View {
     @Environment(MailStore.self) private var store
 
+    private var title: String {
+        store.multipleAccounts ? "\(store.accounts.count) accounts" : (store.account?.label ?? "")
+    }
+
     var body: some View {
         HStack(spacing: Theme.s(10)) {
             AvatarView(name: store.account?.displayName ?? "", email: store.account?.email ?? "", size: 30)
             VStack(alignment: .leading, spacing: Theme.s(1)) {
-                Text(store.account?.displayName.isEmpty == false ? store.account!.displayName : (store.account?.email ?? ""))
+                Text(title)
                     .font(Theme.font(size: 12.5, weight: .semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                    .help(store.accounts.map(\.email).joined(separator: "\n"))
                 syncLine
             }
             Spacer(minLength: 0)
+            Button { store.addingAccount = true } label: {
+                Image(systemName: "person.crop.circle.badge.plus").font(Theme.font(size: 13)).foregroundStyle(Theme.text3).frame(width: 26, height: 26)
+            }
+            .buttonStyle(.plain)
+            .help("Add an account")
             SettingsLink {
                 Image(systemName: "gearshape").font(Theme.font(size: 13)).foregroundStyle(Theme.text3).frame(width: 26, height: 26)
             }
@@ -275,3 +438,4 @@ private struct AccountRow: View {
         .lineLimit(1)
     }
 }
+

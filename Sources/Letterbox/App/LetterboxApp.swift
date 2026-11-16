@@ -63,6 +63,8 @@ struct MailCommands: Commands {
             Button("Get New Mail") { store.refresh() }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .disabled(store.account == nil)
+            Button("Add Account…") { store.addingAccount = true }
+                .disabled(store.account == nil)
         }
         CommandMenu("Message") {
             let ids = Array(store.selection)
@@ -97,12 +99,12 @@ struct MailCommands: Commands {
         CommandMenu("Go") {
             Button("Search or Ask Claude…") { store.showPalette.toggle() }
                 .keyboardShortcut("k")
-            Button("Find") { store.searchFocusRequest += 1; if store.sidebarSelection == .dashboard { store.sidebarSelection = .folder(store.inbox?.path ?? "INBOX") } }
+            Button("Find") { store.searchFocusRequest += 1; if store.sidebarSelection == .dashboard { store.sidebarSelection = .mailbox(.inbox) } }
                 .keyboardShortcut("f")
             Divider()
             Button("Dashboard") { store.sidebarSelection = .dashboard }
                 .keyboardShortcut("1")
-            Button("Inbox") { store.sidebarSelection = .folder(store.inbox?.path ?? "INBOX") }
+            Button("Inbox") { store.sidebarSelection = .mailbox(.inbox) }
                 .keyboardShortcut("2")
             Button("Flagged") { store.sidebarSelection = .flagged }
                 .keyboardShortcut("3")

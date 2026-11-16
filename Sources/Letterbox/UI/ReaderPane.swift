@@ -44,7 +44,7 @@ private struct ReaderToolbar: View {
             IconButton(symbol: single?.flagged == true ? "flag.fill" : "flag", help: "Flag (S)", tint: single?.flagged == true ? Theme.high : Theme.text2) { store.toggleFlag(ids) }.disabled(none)
             IconButton(symbol: single?.seen == false ? "envelope.badge.fill" : "envelope.badge", help: "Read / Unread (U)") { store.toggleRead(ids) }.disabled(none)
             Menu {
-                ForEach(store.folders) { f in Button(f.displayName) { store.move(ids, to: f.path) } }
+                ForEach(store.moveTargets(for: ids)) { f in Button(f.displayName) { store.move(ids, to: f) } }
             } label: {
                 Image(systemName: "folder").font(Theme.font(size: 13, weight: .medium)).foregroundStyle(Theme.text2)
             }
@@ -403,17 +403,12 @@ struct TimelineStrip: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(events.enumerated()), id: \.offset) { idx, e in
                 HStack(alignment: .top, spacing: Theme.s(10)) {
-                    VStack(spacing: 0) {
-                        Circle()
-                            .strokeBorder(e.upcoming ? Theme.text : Theme.text3, lineWidth: 1.2)
-                            .background(Circle().fill(e.upcoming ? Theme.sunken : Theme.text3))
-                            .frame(width: 7, height: 7)
-                            .padding(.top, Theme.s(4))
-                        if idx < events.count - 1 {
-                            Rectangle().fill(Theme.hairline).frame(width: 1).frame(maxHeight: .infinity)
-                        }
-                    }
-                    .frame(width: 8)
+                    Circle()
+                        .strokeBorder(e.upcoming ? Theme.text : Theme.text3, lineWidth: 1.2)
+                        .background(Circle().fill(e.upcoming ? Theme.sunken : Theme.text3))
+                        .frame(width: 7, height: 7)
+                        .padding(.top, Theme.s(4))
+                        .frame(width: 8)
                     Text(e.day.map { $0.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) } ?? e.date)
                         .font(Theme.font(size: 11.5).monospacedDigit())
                         .foregroundStyle(e.upcoming ? Theme.text : Theme.text3)
@@ -424,6 +419,17 @@ struct TimelineStrip: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.bottom, idx < events.count - 1 ? 8 : 0)
                     Spacer(minLength: 0)
+                }
+                // The connector lives in the background so it takes the row's height
+                // instead of claiming spare space and stretching the row.
+                .background(alignment: .topLeading) {
+                    if idx < events.count - 1 {
+                        Rectangle().fill(Theme.hairline)
+                            .frame(width: 1)
+                            .frame(maxHeight: .infinity)
+                            .padding(.top, Theme.s(4) + 7)
+                            .frame(width: 8)
+                    }
                 }
             }
         }

@@ -1,8 +1,13 @@
 import Foundation
 
-struct Account: Codable, Equatable {
+struct Account: Codable, Equatable, Identifiable {
+    /// Stable local identifier. The first account from single-account builds keeps `legacyID`
+    /// so its existing cache, password and briefing carry over unchanged.
+    var id: String = UUID().uuidString
     var email: String
     var displayName: String
+    /// Short name shown in the sidebar, e.g. "Work". Empty means Letterbox picks one.
+    var nickname = ""
     var provider: String = "custom"
     var username: String = ""
     var imapHost = ""
@@ -14,8 +19,11 @@ struct Account: Codable, Equatable {
     /// Some providers (e.g. Gmail) file sent mail automatically.
     var serverSavesSent = false
 
+    static let legacyID = "default"
+
     var loginName: String { username.isEmpty ? email : username }
     var address: MailAddress { MailAddress(name: displayName, email: email) }
+    var label: String { displayName.isEmpty ? email : displayName }
 
     init(email: String, displayName: String) {
         self.email = email
@@ -24,8 +32,10 @@ struct Account: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? Self.legacyID
         email = try c.decode(String.self, forKey: .email)
         displayName = try c.decodeIfPresent(String.self, forKey: .displayName) ?? ""
+        nickname = try c.decodeIfPresent(String.self, forKey: .nickname) ?? ""
         provider = try c.decodeIfPresent(String.self, forKey: .provider) ?? "custom"
         username = try c.decodeIfPresent(String.self, forKey: .username) ?? ""
         imapHost = try c.decodeIfPresent(String.self, forKey: .imapHost) ?? ""
@@ -37,22 +47,29 @@ struct Account: Codable, Equatable {
         serverSavesSent = try c.decodeIfPresent(Bool.self, forKey: .serverSavesSent) ?? false
     }
 
-    static func load() -> Account? {
+    // MARK: Persistence
+
+    /// All accounts, in the order they were added. Upgrades a single-account setup in place.
+    static func loadAll() -> [Account] {
         migrateLegacyDefaults()
-        guard let data = UserDefaults.standard.data(forKey: "account") else { return nil }
-        return try? JSONDecoder().decode(Account.self, from: data)
+        let d = UserDefaults.standard
+        if let data = d.data(forKey: "accounts"), let list = try? JSONDecoder().decode([Account].self, from: data) {
+            return list
+        }
+        guard let data = d.data(forKey: "account"), let single = try? JSONDecoder().decode(Account.self, from: data) else { return [] }
+        saveAll([single])
+        d.removeObject(forKey: "account")
+        return [single]
     }
 
-    func save() {
-        UserDefaults.standard.set(try? JSONEncoder().encode(self), forKey: "account")
+    static func saveAll(_ accounts: [Account]) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(accounts), forKey: "accounts")
     }
-
-    static func clear() { UserDefaults.standard.removeObject(forKey: "account") }
 
     /// Early builds used a different bundle identifier; carry settings over once.
     private static func migrateLegacyDefaults() {
         let d = UserDefaults.standard
-        guard d.data(forKey: "account") == nil, !d.bool(forKey: "migratedLegacyDefaults"),
+        guard d.data(forKey: "account") == nil, d.data(forKey: "accounts") == nil, !d.bool(forKey: "migratedLegacyDefaults"),
               let legacy = UserDefaults(suiteName: "app.letterbox.mail") else { return }
         d.set(true, forKey: "migratedLegacyDefaults")
         for key in ["account", "briefing", "aiEnabled", "aiModel", "claudePath", "blockRemoteContent", "saveToSent", "signature"] {
@@ -88,6 +105,21 @@ enum FolderRole: String {
         }
     }
 
+    /// Name for the combined mailbox of this role across accounts.
+    var title: String {
+        switch self {
+        case .inbox: return "Inbox"
+        case .drafts: return "Drafts"
+        case .sent: return "Sent"
+        case .archive: return "Archive"
+        case .junk: return "Junk"
+        case .trash: return "Trash"
+        case .custom: return "Folder"
+        }
+    }
+
+    static let mailboxes: [FolderRole] = [.inbox, .drafts, .sent, .archive, .junk, .trash]
+
     /// Folders whose contents shouldn't count as "mail I received".
     var isOutgoingOrDiscarded: Bool { self == .sent || self == .drafts || self == .trash || self == .junk }
 
@@ -111,13 +143,15 @@ enum FolderRole: String {
 }
 
 struct Folder: Identifiable, Hashable {
-    var id: String { path }
+    /// Unique across accounts; folder paths alone repeat (every account has an INBOX).
+    var id: String { MessageSummary.folderID(account, path) }
     let path: String
     var name: String
     var delimiter: String?
     var role: FolderRole
     var total: Int
     var unread: Int
+    var account: String = ""
 
     var displayName: String {
         switch role {
@@ -148,9 +182,15 @@ struct MessageSummary: Identifiable, Hashable {
     var snippet: String
     var inReplyTo: String?
     var references: String?
+    /// The id of the Letterbox account this message belongs to.
+    var account: String = ""
 
-    var id: String { Self.makeID(folder, uid) }
-    static func makeID(_ folder: String, _ uid: UInt32) -> String { "\(folder)\u{1}\(uid)" }
+    /// Unique across accounts.
+    var id: String { account.isEmpty ? localID : "\(account)\u{2}\(localID)" }
+    /// Unique within one account's cache; what that cache stores.
+    var localID: String { "\(folder)\u{1}\(uid)" }
+    var folderID: String { Self.folderID(account, folder) }
+    static func folderID(_ account: String, _ path: String) -> String { account.isEmpty ? path : "\(account)\u{2}\(path)" }
 
     var sender: MailAddress { MailAddress(name: fromName, email: fromEmail) }
     var senderDisplay: String { fromName.isEmpty ? (fromEmail.isEmpty ? "Unknown Sender" : fromEmail) : fromName }
@@ -163,17 +203,23 @@ struct MessageSummary: Identifiable, Hashable {
 }
 
 struct Alias: Identifiable, Hashable {
-    var id: String { email }
+    var id: String { "\(account)\u{2}\(email)" }
     let email: String
     var name: String
     var isPrimary: Bool
     var isManual: Bool
     var unread: Int = 0
+    var account: String = ""
 }
 
 enum SidebarItem: Hashable {
     case dashboard
+    /// One kind of mailbox (Inbox, Sent…) across all accounts.
+    case mailbox(FolderRole)
+    /// A single folder, by `Folder.id`.
     case folder(String)
+    /// Custom folders with the same name across accounts, by lowercased display name.
+    case folderGroup(String)
     case flagged
     case address(String)
 }

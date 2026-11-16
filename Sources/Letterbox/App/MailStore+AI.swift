@@ -12,6 +12,7 @@ enum AIStatus: Equatable {
     var isWorking: Bool { if case .working = self { return true }; return false }
 }
 
+/// One briefing covers every account.
 extension Briefing {
     static func load() -> Briefing? {
         guard let d = UserDefaults.standard.data(forKey: "briefing") else { return nil }
@@ -64,7 +65,7 @@ extension MailStore {
                 claude = ClaudeCLI(executable: url, model: model)
                 if claudePath.isEmpty { claudePath = url.path }
                 aiStatus = .ready
-                if account != nil { scheduleTriage() }
+                if !accounts.isEmpty { scheduleTriage() }
             } else {
                 claude = nil
                 aiStatus = .missing
@@ -76,13 +77,17 @@ extension MailStore {
 
     // MARK: Conversations
 
-    private var threadFolders: [String] {
-        folders.filter { [.inbox, .sent, .archive, .custom].contains($0.role) }.map(\.path)
-    }
-
+    /// Threads each account on its own (a thread lives in one mailbox), then lists them together.
     func rebuildConversations() {
-        let pool = repo.threadPool(folders: threadFolders, since: Date().addingTimeInterval(-75 * 86400))
-        let convs = ThreadBuilder.build(pool, me: myAddresses, sentFolder: folder(.sent)?.path)
+        let me = myAddresses
+        let since = Date().addingTimeInterval(-75 * 86400)
+        var convs: [Conversation] = []
+        for s in orderedSessions {
+            let paths = s.folders.filter { [.inbox, .sent, .archive, .custom].contains($0.role) }.map(\.path)
+            let pool = s.repo.threadPool(folders: paths, since: since)
+            convs += ThreadBuilder.build(pool, me: me, sentFolder: s.folder(.sent)?.path, account: s.id)
+        }
+        convs.sort { $0.latest.date > $1.latest.date }
         var threadOf: [String: String] = [:]
         var byID: [String: Conversation] = [:]
         var known: [String: MessageSummary] = [:]
@@ -121,11 +126,11 @@ extension MailStore {
     var dashboard: DashboardModel {
         var d = DashboardModel()
         let cutoff = Date().addingTimeInterval(-30 * 86400)
-        let inboxPath = inbox?.path
+        let inboxIDs = Set(inboxes.map(\.id))
         for c in conversations where c.latest.date >= cutoff && c.hasIncoming {
-            if c.messages.contains(where: { $0.folder == inboxPath && !$0.seen }) { d.unread += 1 }
+            if c.messages.contains(where: { inboxIDs.contains($0.folderID) && !$0.seen }) { d.unread += 1 }
             guard let raw = threadInsights[c.id] else {
-                if c.messages.contains(where: { $0.folder == inboxPath }) { d.pending += 1 }
+                if c.messages.contains(where: { inboxIDs.contains($0.folderID) }) { d.pending += 1 }
                 continue
             }
             var i = raw
@@ -162,16 +167,16 @@ extension MailStore {
     }
 
     func setDone(_ messageID: String, _ done: Bool = true) {
-        guard let thread = threadOf[messageID], var i = threadInsights[thread] else { return }
+        guard let thread = threadOf[messageID], let c = conversationByID[thread], var i = threadInsights[thread] else { return }
         i.done = done
         withAnimation(.snappy) { threadInsights[thread] = i }
-        repo.setThreadDone(done, thread: thread)
+        session(c.account)?.repo.setThreadDone(done, thread: c.key)
         reindexInsights()
         if done { showToast("Marked as done", symbol: "checkmark") }
     }
 
     func archiveLowPriority() {
-        let ids = dashboard.low.flatMap { $0.conversation.messages.filter { $0.folder == inbox?.path }.map(\.id) }
+        let ids = dashboard.low.flatMap { $0.conversation.messages.filter(isInInbox).map(\.id) }
         guard !ids.isEmpty else { return }
         archive(ids)
     }
@@ -187,20 +192,22 @@ extension MailStore {
     }
 
     private func runTriage(force: Bool) async {
-        guard let claude, let account else { return }
+        guard let claude, !accounts.isEmpty else { return }
+        let gen = generation
         if conversations.isEmpty { rebuildConversations() }
-        let inboxPath = inbox?.path
+        let inboxIDs = Set(inboxes.map(\.id))
         let cutoff = Date().addingTimeInterval(-21 * 86400)
+        // `latestID` is stored per account, so compare the account-local id.
         let candidates = conversations.filter { c in
-            c.latest.date >= cutoff && c.hasIncoming && c.messages.contains { $0.folder == inboxPath }
-                && (force ? true : threadInsights[c.id]?.latestID != c.latest.id)
+            c.latest.date >= cutoff && c.hasIncoming && c.messages.contains { inboxIDs.contains($0.folderID) }
+                && (force ? true : threadInsights[c.id]?.latestID != c.latest.localID)
         }
         .prefix(force ? 80 : 60)
         let stale = briefing.map { Date().timeIntervalSince($0.generated) > 3 * 3600 } ?? true
         guard !candidates.isEmpty || stale else { return }
 
-        let user = "\(account.displayName) <\(account.email)>"
-        let repo = repo
+        let user = userDescription
+        let repos = Dictionary(uniqueKeysWithValues: orderedSessions.map { ($0.id, $0.repo) })
         let list = Array(candidates)
         let batches = stride(from: 0, to: list.count, by: 8).map { Array(list[$0..<min($0 + 8, list.count)]) }
         var remaining = list.count
@@ -210,16 +217,19 @@ extension MailStore {
                 batch.enumerated().map { idx, c in
                     var bodies: [String: String] = [:]
                     for m in c.messages.suffix(6) {
-                        if let raw = repo.body(folder: m.folder, uid: m.uid) {
+                        if let raw = repos[m.account]?.body(folder: m.folder, uid: m.uid) {
                             bodies[m.id] = ThreadBuilder.newContent(MessageParser.parse(raw).quotableText)
                         }
                     }
                     return Assistant.threadBlock(id: "c\(idx + 1)", conversation: c, bodies: bodies)
                 }
             }.value
+            guard generation == gen else { return }
             do {
                 let r = try await claude.structured(Assistant.ThreadResponse.self, prompt: Assistant.threadPrompt(blocks),
                                                     system: Assistant.threadSystem(user: user), schema: Assistant.threadSchema)
+                // The user switched accounts while Claude was reading; this batch belongs to the old one.
+                guard generation == gen else { return }
                 for item in r.items {
                     guard let n = Int(item.id.dropFirst()), batch.indices.contains(n - 1) else { continue }
                     let c = batch[n - 1]
@@ -228,25 +238,27 @@ extension MailStore {
                     let insight = Insight(
                         priority: max(0, min(3, item.priority)), category: item.category, summary: item.summary,
                         reason: item.reason ?? "", action: item.action ?? "", due: "", needsReply: status == "needs_reply",
-                        done: threadInsights[c.id]?.latestID == c.latest.id ? (threadInsights[c.id]?.done ?? false) : false,
+                        done: threadInsights[c.id]?.latestID == c.latest.localID ? (threadInsights[c.id]?.done ?? false) : false,
                         status: status, dueDate: item.due_date ?? "",
                         timeline: (item.timeline ?? []).map { TimelineEvent(date: $0.date, text: $0.text, upcoming: $0.upcoming) },
-                        latestID: c.latest.id)
-                    repo.saveThreadInsight(insight, thread: c.id)
+                        latestID: c.latest.localID)
+                    repos[c.account]?.saveThreadInsight(insight, thread: c.key)
                     withAnimation(.snappy) { threadInsights[c.id] = insight }
                 }
                 reindexInsights()
                 remaining -= batch.count
             } catch {
-                aiStatus = .failed(error.localizedDescription)
+                if generation == gen { aiStatus = .failed(error.localizedDescription) }
                 return
             }
         }
+        guard generation == gen else { return }
         await refreshBriefing()
     }
 
     func refreshBriefing() async {
-        guard let claude, let account else { return }
+        guard let claude, !accounts.isEmpty else { return }
+        let gen = generation
         let d = dashboard
         var lines: [String] = []
         let df = DateFormatter()
@@ -267,20 +279,22 @@ extension MailStore {
         aiStatus = .working("Writing your briefing…")
         do {
             let r = try await claude.structured(Assistant.BriefingResponse.self, prompt: Assistant.briefingPrompt(lines, unread: d.unread),
-                                                system: Assistant.briefingSystem(user: account.displayName.isEmpty ? account.email : account.displayName),
+                                                system: Assistant.briefingSystem(user: userName),
                                                 schema: Assistant.briefingSchema)
-            withAnimation(.smooth) { briefing = Briefing(headline: r.headline, highlights: r.highlights, generated: Date()) }
-            briefing?.save()
+            let fresh = Briefing(headline: r.headline, highlights: r.highlights, generated: Date())
+            fresh.save()
+            guard generation == gen else { return }
+            withAnimation(.smooth) { briefing = fresh }
             aiStatus = .ready
         } catch {
-            aiStatus = .failed(error.localizedDescription)
+            if generation == gen { aiStatus = .failed(error.localizedDescription) }
         }
     }
 
     // MARK: Summaries
 
     func summarize(_ m: MessageSummary) {
-        guard let claude, let account, !summarizing.contains(m.id) else { return }
+        guard let claude, !summarizing.contains(m.id) else { return }
         summarizing.insert(m.id)
         let body: String
         if let c = conversation(for: m.id), c.count > 1 {
@@ -291,12 +305,14 @@ extension MailStore {
         } else {
             body = bodyCache[m.id]?.quotableText ?? m.snippet
         }
+        let gen = generation
         Task {
-            defer { summarizing.remove(m.id) }
+            defer { if generation == gen { summarizing.remove(m.id) } }
             do {
                 let s = try await claude.structured(DeepSummary.self,
                                                     prompt: Assistant.summaryPrompt(from: MessageBuilder.format(m.sender), subject: m.displaySubject, body: body),
-                                                    system: Assistant.summarySystem(user: account.displayName), schema: Assistant.summarySchema)
+                                                    system: Assistant.summarySystem(user: userName), schema: Assistant.summarySchema)
+                guard generation == gen else { return }
                 withAnimation(.smooth) { deepSummaries[m.id] = s }
             } catch {
                 showToast(error.localizedDescription, symbol: "exclamationmark.triangle")
@@ -308,14 +324,15 @@ extension MailStore {
 
     func draftWithClaude(_ m: MessageSummary, tone: ReplyTone? = nil, instruction: String = "") {
         let target = conversation(for: m.id)?.latestIncoming ?? m
-        if bodyCache[target.id] == nil, let raw = repo.body(folder: target.folder, uid: target.uid) {
+        let repo = session(target.account)?.repo
+        if bodyCache[target.id] == nil, let raw = repo?.body(folder: target.folder, uid: target.uid) {
             bodyCache[target.id] = MessageParser.parse(raw)
         }
         guard let d = reply(all: false, to: target) else { return }
         if let c = conversation(for: target.id), c.count > 1 {
             d.context = c.messages.suffix(6).map { msg in
                 let text = bodyCache[msg.id].map { ThreadBuilder.newContent($0.quotableText) }
-                    ?? repo.body(folder: msg.folder, uid: msg.uid).map { ThreadBuilder.newContent(MessageParser.parse($0).quotableText) }
+                    ?? repo?.body(folder: msg.folder, uid: msg.uid).map { ThreadBuilder.newContent(MessageParser.parse($0).quotableText) }
                     ?? msg.snippet
                 return "[\(RelativeDate.detailed(msg.date))] \(c.isFromMe(msg) ? "ME" : msg.senderDisplay):\n\(text)"
             }.joined(separator: "\n\n")
@@ -326,12 +343,11 @@ extension MailStore {
     }
 
     func generate(_ d: ComposeDraft) {
-        guard let claude, let account else { d.aiError = "Claude isn’t available. Check Settings → Claude."; return }
+        guard let claude else { d.aiError = "Claude isn’t available. Check Settings → Claude."; return }
         d.aiTask?.cancel()
         d.aiError = nil
         d.aiBusy = true
-        let fromName = addresses.first { $0.email == d.fromEmail.lowercased() }?.name
-        let name = (fromName?.isEmpty == false ? fromName! : account.displayName)
+        let name = senderName(for: d.fromEmail)
         let system: String
         let prompt: String
         if d.context.isEmpty {
@@ -395,7 +411,7 @@ extension MailStore {
     }
 
     func ask(_ question: String) -> AsyncThrowingStream<String, Error> {
-        guard let claude, let account else {
+        guard let claude, !accounts.isEmpty else {
             return AsyncThrowingStream { $0.finish(throwing: ClaudeError(message: "Claude isn’t available. Check Settings → Claude.")) }
         }
         let df = DateFormatter()
@@ -412,6 +428,6 @@ extension MailStore {
             return s
         }
         return claude.stream(prompt: Assistant.askPrompt(question: question, context: Array(lines)),
-                             system: Assistant.askSystem(user: account.displayName.isEmpty ? account.email : account.displayName))
+                             system: Assistant.askSystem(user: userName))
     }
 }

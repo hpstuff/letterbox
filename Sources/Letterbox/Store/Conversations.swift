@@ -22,9 +22,15 @@ struct TimelineEvent: Codable, Hashable {
 
 /// A thread of related messages across Inbox, Sent and Archive.
 struct Conversation: Identifiable, Hashable {
+    /// Unique across accounts.
     let id: String
     var messages: [MessageSummary]      // oldest → newest
     var fromMe: Set<String>             // message ids written by the user
+    var account: String = ""
+    /// The thread key inside its account's cache, where Claude's insight is stored.
+    var key: String = ""
+
+    static func globalID(account: String, key: String) -> String { account.isEmpty ? key : "\(account)\u{2}\(key)" }
 
     var latest: MessageSummary { messages[messages.count - 1] }
     var subject: String { messages.first { !$0.subject.isEmpty }?.displaySubject ?? latest.displaySubject }
@@ -78,7 +84,7 @@ enum ThreadBuilder {
         return out
     }
 
-    static func build(_ all: [MessageSummary], me: Set<String>, sentFolder: String?) -> [Conversation] {
+    static func build(_ all: [MessageSummary], me: Set<String>, sentFolder: String?, account: String = "") -> [Conversation] {
         // De-duplicate copies of the same message living in two folders (prefer non-sent, then newest uid).
         var seen: [String: Int] = [:]
         var msgs: [MessageSummary] = []
@@ -139,9 +145,9 @@ enum ThreadBuilder {
         return groups.values.map { list in
             let sorted = list.sorted { $0.date < $1.date }
             let first = sorted[0]
-            let key = ids(in: first.messageID).first ?? first.id
+            let key = ids(in: first.messageID).first ?? first.localID
             let mine = Set(sorted.filter { $0.folder == sentFolder || me.contains($0.fromEmail.lowercased()) }.map(\.id))
-            return Conversation(id: key, messages: sorted, fromMe: mine)
+            return Conversation(id: Conversation.globalID(account: account, key: key), messages: sorted, fromMe: mine, account: account, key: key)
         }
         .sorted { $0.latest.date > $1.latest.date }
     }

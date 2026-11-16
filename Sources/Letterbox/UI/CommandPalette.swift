@@ -36,25 +36,30 @@ struct CommandPalette: View {
         let commands: [Item] = [
             Item(id: "compose", title: "New message", subtitle: "⌘N", symbol: "square.and.pencil") { close(); store.newMessage() },
             Item(id: "dash", title: "Go to Dashboard", subtitle: "⌘1", symbol: "square.grid.2x2") { close(); store.sidebarSelection = .dashboard },
-            Item(id: "inbox", title: "Go to Inbox", subtitle: "⌘2", symbol: "tray") { close(); store.sidebarSelection = .folder(store.inbox?.path ?? "INBOX") },
+            Item(id: "inbox", title: "Go to Inbox", subtitle: "⌘2", symbol: "tray") { close(); store.sidebarSelection = .mailbox(.inbox) },
             Item(id: "flagged", title: "Go to Flagged", subtitle: "⌘3", symbol: "flag") { close(); store.sidebarSelection = .flagged },
             Item(id: "refresh", title: "Check for new mail", subtitle: "⇧⌘N", symbol: "arrow.clockwise") { close(); store.refresh() },
             Item(id: "triage", title: "Refresh Claude insights", subtitle: nil, symbol: "wand.and.stars") { close(); store.scheduleTriage(force: true) },
             Item(id: "settings", title: "Open Settings", subtitle: "⌘,", symbol: "gearshape") {
                 close(); NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
             },
-        ] + store.folders.filter { $0.role != .inbox }.map { f in
-            Item(id: "f-\(f.path)", title: "Go to \(f.displayName)", subtitle: nil, symbol: f.role.symbol) {
-                close(); store.sidebarSelection = .folder(f.path)
+        ] + store.mailboxRoles.filter { $0 != .inbox }.map { role in
+            Item(id: "m-\(role.rawValue)", title: "Go to \(store.mailboxTitle(role))", subtitle: nil, symbol: role.symbol) {
+                close(); store.sidebarSelection = .mailbox(role)
+            }
+        } + store.folders.filter { $0.role == .custom }.map { f in
+            Item(id: "f-\(f.id)", title: "Go to \(f.displayName)",
+                 subtitle: store.multipleAccounts ? store.session(f.account)?.account.email : nil, symbol: f.role.symbol) {
+                close(); store.sidebarSelection = .folder(f.id)
             }
         }
         out += q.isEmpty ? Array(commands.prefix(4)) : commands.filter { $0.title.localizedCaseInsensitiveContains(q) }
         if q.count >= 2 {
-            let hits = store.repo.messages(MessageQuery(item: .dashboard, search: q, limit: 6))
+            let hits = store.search(q, limit: 6)
             out += hits.map { m in
                 Item(id: m.id, title: m.displaySubject, subtitle: "\(m.senderDisplay) · \(RelativeDate.short(m.date))", symbol: "envelope") {
                     close()
-                    store.sidebarSelection = .folder(m.folder)
+                    store.sidebarSelection = .folder(m.folderID)
                     store.selection = [m.id]
                 }
             }
@@ -273,7 +278,7 @@ struct AskChatView: View {
                     Button {
                         let m = c.latestIncoming ?? c.latest
                         store.showPalette = false
-                        store.sidebarSelection = .folder(m.folder)
+                        store.sidebarSelection = .folder(m.folderID)
                         store.selection = [m.id]
                     } label: {
                         HStack(spacing: Theme.s(8)) {

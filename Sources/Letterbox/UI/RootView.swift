@@ -6,7 +6,7 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if store.account == nil {
+            if store.accounts.isEmpty {
                 OnboardingView()
                     .frame(minWidth: 820, minHeight: 600)
             } else {
@@ -83,6 +83,13 @@ struct MainShell: View {
             }
         }
         .animation(.snappy(duration: 0.18), value: store.showPalette)
+        .sheet(isPresented: Binding(
+            get: { store.addingAccount },
+            set: { store.addingAccount = $0 }
+        )) {
+            OnboardingView(addingAccount: true)
+                .frame(width: 640, height: 700)
+        }
         .alert("Delete permanently?", isPresented: Binding(
             get: { store.confirmDeletion != nil },
             set: { if !$0 { store.confirmDeletion = nil } }

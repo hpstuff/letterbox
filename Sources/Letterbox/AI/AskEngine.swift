@@ -103,12 +103,13 @@ extension MailStore {
         df.dateFormat = "yyyy-MM-dd"
         var ids: [String: Conversation] = [:]
         var lines: [String] = []
-        let trash = folder(.trash)?.path, junk = folder(.junk)?.path
+        let names = Dictionary(folders.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         for (n, c) in conversations.prefix(limit).enumerated() {
             let key = "c\(n + 1)"
             ids[key] = c
-            let folders = Set(c.messages.map(\.folder)).filter { $0 != trash && $0 != junk }
-                .compactMap { p in self.folders.first { $0.path == p }?.displayName }.sorted().joined(separator: "+")
+            var folders = Set(c.messages.compactMap { names[$0.folderID] }.filter { $0.role != .trash && $0.role != .junk }.map(\.displayName))
+                .sorted().joined(separator: "+")
+            if multipleAccounts, let email = session(c.account)?.account.email { folders += folders.isEmpty ? email : " (\(email))" }
             var s = "\(key) | \(df.string(from: c.latest.date)) | \(c.counterpart.display) <\(c.counterpart.email)> | \"\(c.subject)\" | \(c.count) msg | last by \(c.lastFromMe ? "ME" : "THEM")"
             if c.unread { s += " | unread" }
             if !folders.isEmpty { s += " | \(folders)" }
@@ -127,7 +128,7 @@ extension MailStore {
     private func fullText(_ c: Conversation) -> String {
         c.messages.suffix(8).map { m in
             var text = bodyCache[m.id].map { ThreadBuilder.newContent($0.quotableText) }
-            if text == nil, let raw = repo.body(folder: m.folder, uid: m.uid) {
+            if text == nil, let raw = session(m.account)?.repo.body(folder: m.folder, uid: m.uid) {
                 text = ThreadBuilder.newContent(MessageParser.parse(raw).quotableText)
             }
             let who = c.isFromMe(m) ? "ME" : MessageBuilder.format(m.sender)
@@ -136,7 +137,7 @@ extension MailStore {
     }
 
     func ask(_ question: String, in session: AskSession) {
-        guard let claude, let account else {
+        guard let claude, !accounts.isEmpty else {
             var t = AskTurn(question: question)
             t.error = "Claude isn’t available. Check Settings → Claude."
             t.done = true
@@ -147,7 +148,7 @@ extension MailStore {
         session.turns.append(AskTurn(question: question))
         let index = session.turns.count - 1
         session.busy = true
-        let user = account.displayName.isEmpty ? account.email : "\(account.displayName) <\(account.email)>"
+        let user = userDescription
         let (lines, ids) = assistantIndex()
         let history = session.turns.dropLast().suffix(4).map { "User: \($0.question)\nAssistant: \($0.answer)" }.joined(separator: "\n\n")
         let today = Date().formatted(.dateTime.weekday(.wide).day().month(.wide).year())
@@ -195,16 +196,15 @@ extension MailStore {
 
     /// Runs a confirmed proposal on the selected conversations.
     func perform(_ action: ProposedAction) -> Int {
-        let sent = folder(.sent)?.path, trash = folder(.trash)?.path
         let messages = action.conversations.filter { action.selected.contains($0) }
             .compactMap { conversationByID[$0] }
             .flatMap(\.messages)
-            .filter { $0.folder != sent && $0.folder != trash }
+            .filter { folder(.sent, in: $0.account)?.path != $0.folder && folder(.trash, in: $0.account)?.path != $0.folder }
         let ids = messages.map(\.id)
         guard !ids.isEmpty else { return 0 }
         switch action.kind {
         case .trash:
-            if let trash { move(ids, to: trash, label: "Moved \(ids.count) messages to Trash", symbol: "trash") }
+            move(ids, toRole: .trash, label: "Moved \(ids.count) messages to Trash", symbol: "trash")
         case .archive:
             archive(ids)
         case .markRead:

@@ -36,7 +36,7 @@ enum Snapshot {
                 await render(RootView().environment(store), size: size, appearance: appearance, to: "\(dir)/dashboard-\(name).png")
 
                 store.selection = []
-                store.sidebarSelection = .folder("INBOX")
+                store.sidebarSelection = .mailbox(.inbox)
                 try? await Task.sleep(for: .milliseconds(100))
                 if let m = store.messages.first(where: { $0.uid == 20 }) { store.selection = [m.id] }
                 try? await Task.sleep(for: .milliseconds(150))
@@ -69,7 +69,7 @@ enum Snapshot {
             await render(ComposeView(draft: draft).environment(store), size: NSSize(width: 760, height: 560), appearance: .aqua, to: "\(dir)/compose-light.png")
 
             let signedOut = MailStore(demo: account, database: db)
-            signedOut.account = nil
+            signedOut.accounts = []
             await render(RootView().environment(signedOut), size: NSSize(width: 980, height: 820), appearance: .aqua, to: "\(dir)/onboarding-light.png")
             try? FileManager.default.removeItem(at: url)
             NSApp.terminate(nil)
@@ -106,10 +106,10 @@ enum Snapshot {
         store.rebuildConversations()
         for c in store.conversations {
             guard let incoming = c.messages.last(where: { $0.folder == "INBOX" }), var i = data[incoming.uid] else { continue }
-            i.latestID = c.latest.id
-            repo.saveThreadInsight(i, thread: c.id)
+            i.latestID = c.latest.localID
+            repo.saveThreadInsight(i, thread: c.key)
         }
-        store.threadInsights = repo.threadInsights()
+        store.reloadThreadInsights()
         store.reindexInsights()
         store.claude = ClaudeCLI(executable: URL(fileURLWithPath: "/usr/bin/true"), model: "sonnet")
         store.aiStatus = .ready

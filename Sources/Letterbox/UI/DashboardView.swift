@@ -187,7 +187,7 @@ private struct Metrics: View {
             metric(model.dueThisWeek, "Dated this week")
             divider
             metric(model.unread, "Unread conversations") {
-                store.sidebarSelection = .folder(store.inbox?.path ?? "INBOX")
+                store.sidebarSelection = .mailbox(.inbox)
                 store.unreadOnly = true
             }
         }
