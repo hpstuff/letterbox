@@ -267,9 +267,8 @@ final class MailStore {
 
     /// Kinds of mailbox that exist in at least one account, for the combined list.
     var mailboxRoles: [FolderRole] { FolderRole.mailboxes.filter { r in folders.contains { $0.role == r } } }
-    func mailboxTitle(_ role: FolderRole) -> String {
-        role == .inbox ? "Inbox" : (folders.first { $0.role == role }?.displayName ?? role.title)
-    }
+    /// One plain name for the combined mailbox, whatever each server calls its own folder.
+    func mailboxTitle(_ role: FolderRole) -> String { role.title }
     func mailboxBadge(_ role: FolderRole) -> Int {
         let list = folders.filter { $0.role == role }
         switch role {

@@ -79,6 +79,12 @@ extension MailStore {
         if sidebarExpanded.contains(g.key) { sidebarExpanded.remove(g.key) } else { sidebarExpanded.insert(g.key) }
     }
 
+    /// Label for one account's row inside a group. Adds the folder name when that account has more than one.
+    func rowTitle(_ f: Folder, in g: SidebarGroup) -> String {
+        let shared = g.folders.filter { $0.account == f.account }.count > 1
+        return shared ? "\(accountName(f.account)) · \(f.displayName)" : accountName(f.account)
+    }
+
     /// Badge for one account's row inside a group.
     func badge(for f: Folder) -> Int {
         switch f.role {

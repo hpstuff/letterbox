@@ -118,7 +118,7 @@ struct NavRail: View {
         }
         if expanded {
             ForEach(g.folders) { f in
-                NavItem(title: store.accountName(f.account), symbol: g.symbol, item: .folder(f.id), badge: store.badge(for: f),
+                NavItem(title: store.rowTitle(f, in: g), symbol: g.symbol, item: .folder(f.id), badge: store.badge(for: f),
                         quietBadge: f.role != .inbox, mark: AccountMark(name: store.session(f.account)?.account.displayName ?? "",
                                                                          email: store.session(f.account)?.account.email ?? "",
                                                                          color: store.accountColor(f.account)))

@@ -123,14 +123,35 @@ enum FolderRole: String {
     /// Folders whose contents shouldn't count as "mail I received".
     var isOutgoingOrDiscarded: Bool { self == .sent || self == .drafts || self == .trash || self == .junk }
 
-    static func detect(path: String, attributes: Set<String>) -> FolderRole {
+    /// Roles for one account's whole folder list.
+    /// The server's own markers win: a folder that only looks like "Drafts" by name stays a plain folder
+    /// when another folder is marked as the drafts mailbox (Gmail has a "Drafts" label next to "[Gmail]/Drafts").
+    static func detect(_ remote: [RemoteFolder]) -> [FolderRole] {
+        let marked = remote.map { marked(path: $0.path, attributes: $0.attributes) }
+        let claimed = Set(marked.compactMap { $0 })
+        return zip(remote, marked).map { f, role in
+            if let role { return role }
+            let guess = guessed(path: f.path, delimiter: f.delimiter)
+            return claimed.contains(guess) ? .custom : guess
+        }
+    }
+
+    /// The role the server says a folder has.
+    private static func marked(path: String, attributes: Set<String>) -> FolderRole? {
         if path.uppercased() == "INBOX" { return .inbox }
         if attributes.contains("\\sent") { return .sent }
         if attributes.contains("\\drafts") { return .drafts }
         if attributes.contains("\\trash") { return .trash }
         if attributes.contains("\\junk") { return .junk }
         if attributes.contains("\\archive") || attributes.contains("\\all") { return .archive }
-        let name = ModifiedUTF7.decode(path).lowercased()
+        return nil
+    }
+
+    /// The role a folder seems to have from its name, ignoring a wrapper such as "INBOX." or "[Gmail]/".
+    private static func guessed(path: String, delimiter: String?) -> FolderRole {
+        var parts = [ModifiedUTF7.decode(path)]
+        if let d = delimiter, !d.isEmpty { parts = parts[0].components(separatedBy: d) }
+        let name = Folder.withoutWrapper(parts).joined(separator: "/").lowercased()
         switch name {
         case "sent", "sent items", "sent messages", "sent mail", "outbox sent", "gesendet": return .sent
         case "drafts", "draft", "entwürfe": return .drafts
@@ -153,12 +174,25 @@ struct Folder: Identifiable, Hashable {
     var unread: Int
     var account: String = ""
 
+    /// The folder's name without the server's wrapper folder, so the same folder matches across accounts.
     var displayName: String {
+        let short = Self.withoutWrapper(name.components(separatedBy: " / ")).joined(separator: " / ")
         switch role {
         case .inbox: return "Inbox"
-        case .custom: return name
-        default: return name.prefix(1).uppercased() + name.dropFirst().lowercased()
+        case .custom: return short
+        default:
+            // "SENT" or "spam" read better as "Sent" and "Spam"; "Sent Mail" stays as the server wrote it.
+            let oneCase = short == short.uppercased() || short == short.lowercased()
+            return oneCase ? short.prefix(1).uppercased() + short.dropFirst().lowercased() : short
         }
+    }
+
+    /// Drops a top folder that only holds the real folders: "INBOX" on servers that nest everything
+    /// under it ("INBOX.Work"), and Gmail's "[Gmail]" or "[Google Mail]".
+    static func withoutWrapper(_ parts: [String]) -> [String] {
+        guard parts.count > 1, let top = parts.first else { return parts }
+        let isWrapper = top.uppercased() == "INBOX" || (top.hasPrefix("[") && top.hasSuffix("]"))
+        return isWrapper ? Array(parts.dropFirst()) : parts
     }
 }
 
