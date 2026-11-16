@@ -163,6 +163,11 @@ struct MessageDetailView: View {
     @Environment(MailStore.self) private var store
     let message: MessageSummary
     @State private var allowRemoteFor: Set<String> = []
+    /// Messages where the user flipped the "match theme" setting.
+    @State private var flippedTheme: Set<String> = []
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var themed: Bool { store.themeHTMLMail != flippedTheme.contains(message.id) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -206,6 +211,9 @@ struct MessageDetailView: View {
                     if let alias = store.receivingAlias(for: message) {
                         TagChip(text: alias, symbol: "at", color: Theme.accentText).help("Received at this alias — replies come from it")
                     }
+                    if case .loaded(let parsed) = store.bodyState, MessageHTML.isHTML(parsed) {
+                        themeToggle
+                    }
                 }
             }
 
@@ -219,6 +227,19 @@ struct MessageDetailView: View {
         .padding(.top, Theme.s(22))
         .padding(.bottom, Theme.s(16))
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Switches this message between the app's theme and the sender's own design.
+    private var themeToggle: some View {
+        Button {
+            if flippedTheme.contains(message.id) { flippedTheme.remove(message.id) } else { flippedTheme.insert(message.id) }
+        } label: {
+            Label(themed ? "Show original" : "Match theme", systemImage: themed ? "paintbrush.pointed" : "paintbrush.pointed.fill")
+                .font(Theme.font(size: 11.5, weight: .medium))
+                .foregroundStyle(Theme.text2)
+        }
+        .buttonStyle(.plain)
+        .help(themed ? "Show this email as the sender designed it" : "Show this email in your theme colors and font")
     }
 
     private var recipients: some View {
@@ -239,7 +260,10 @@ struct MessageDetailView: View {
         switch store.bodyState {
         case .loaded(let parsed):
             let blocked = store.blockRemoteContent && !allowRemoteFor.contains(message.id)
-            let isHTML = parsed.html?.isEmpty == false
+            let isHTML = MessageHTML.isHTML(parsed)
+            let themed = self.themed
+            // Themed mail blends into the pane; the original sits on its own white card.
+            let card = isHTML && !themed
             VStack(spacing: 0) {
                 if blocked && MessageHTML.cachedHasRemote(parsed, key: message.id) {
                     HStack(spacing: Theme.s(8)) {
@@ -257,16 +281,16 @@ struct MessageDetailView: View {
                     .padding(.bottom, Theme.s(10))
                 }
                 MessageWebView(
-                    document: MessageHTML.cachedDocument(for: parsed, key: message.id),
-                    key: message.id,
+                    document: MessageHTML.cachedDocument(for: parsed, key: message.id, themed: themed, dark: colorScheme == .dark),
+                    key: "\(message.id)|\(themed)|\(colorScheme == .dark)",
                     inline: parsed.inline,
                     blockRemote: blocked,
                     onMailto: { store.compose(mailto: $0) }
                 )
-                .clipShape(RoundedRectangle(cornerRadius: isHTML ? 14 : 0, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(isHTML ? Theme.hairline : .clear))
-                .padding(.horizontal, isHTML ? 18 : 0)
-                .padding(.bottom, isHTML ? 18 : 0)
+                .clipShape(RoundedRectangle(cornerRadius: card ? 14 : 0, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(card ? Theme.hairline : .clear))
+                .padding(.horizontal, card ? 18 : 0)
+                .padding(.bottom, card ? 18 : 0)
             }
         case .loading:
             LoadingBody()

@@ -175,6 +175,10 @@ final class MailStore {
     var blockRemoteContent = UserDefaults.standard.bool(forKey: "blockRemoteContent") {
         didSet { UserDefaults.standard.set(blockRemoteContent, forKey: "blockRemoteContent") }
     }
+    /// Repaint HTML mail in the app's theme. Each message can still be shown as the sender made it.
+    var themeHTMLMail = UserDefaults.standard.object(forKey: "themeHTMLMail") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(themeHTMLMail, forKey: "themeHTMLMail") }
+    }
     var saveToSent = UserDefaults.standard.object(forKey: "saveToSent") as? Bool ?? true {
         didSet { UserDefaults.standard.set(saveToSent, forKey: "saveToSent") }
     }

@@ -132,6 +132,9 @@ private struct ReadingSettings: View {
         Form {
             Section("Reading") {
                 Toggle("Block remote images until I load them", isOn: $store.blockRemoteContent)
+                Toggle("Match HTML emails to my theme", isOn: $store.themeHTMLMail)
+                Text("Use “Show original” on a message to see it as the sender made it.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Sending") {
                 Toggle("Save a copy of sent messages to Sent", isOn: $store.saveToSent)

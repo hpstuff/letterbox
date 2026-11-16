@@ -99,29 +99,40 @@ enum MessageHTML {
     private static let urlPattern = try! NSRegularExpression(pattern: "\\b(https?://[^\\s<>\"']+[^\\s<>\"'.,;:!?)\\]])", options: .caseInsensitive)
     private static let emailPattern = try! NSRegularExpression(pattern: "\\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,})\\b", options: .caseInsensitive)
 
-    @MainActor private static var documents: [String: (doc: String, remote: Bool)] = [:]
+    @MainActor private static var documents: [String: String] = [:]
+    @MainActor private static var remote: [String: Bool] = [:]
 
-    @MainActor static func cachedDocument(for message: ParsedMessage, key: String) -> String {
-        entry(message, key).doc
+    /// The message as a full HTML page. `themed` moves HTML mail onto the app's colors and font,
+    /// for the light or dark look given by `dark`. Plain-text mail always follows the theme.
+    @MainActor static func cachedDocument(for message: ParsedMessage, key: String, themed: Bool, dark: Bool) -> String {
+        let css = EmailThemeCSS.current
+        let cacheKey = "\(key)|\(themed ? "\(css.hashValue)|\(dark)" : "original")"
+        if let hit = documents[cacheKey] { return hit }
+        if documents.count > 30 { documents.removeAll() }
+        let doc = document(for: message, themeCSS: css, recolor: themed ? EmailThemeCSS.recolor(dark: dark) : nil)
+        documents[cacheKey] = doc
+        return doc
     }
 
     @MainActor static func cachedHasRemote(_ message: ParsedMessage, key: String) -> Bool {
-        entry(message, key).remote
-    }
-
-    @MainActor private static func entry(_ message: ParsedMessage, _ key: String) -> (doc: String, remote: Bool) {
-        if let hit = documents[key] { return hit }
-        if documents.count > 30 { documents.removeAll() }
-        let value = (document(for: message), hasRemoteContent(message))
-        documents[key] = value
+        if let hit = remote[key] { return hit }
+        if remote.count > 30 { remote.removeAll() }
+        let value = hasRemoteContent(message)
+        remote[key] = value
         return value
     }
 
-    static func document(for message: ParsedMessage) -> String {
-        if let html = message.html, !html.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return htmlDocument(html)
+    static func isHTML(_ message: ParsedMessage) -> Bool {
+        message.html.map { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? false
+    }
+
+    /// `recolor` is nil for the sender's original design.
+    static func document(for message: ParsedMessage, themeCSS: String, recolor: EmailRecolor?) -> String {
+        if isHTML(message), let html = message.html {
+            guard let recolor else { return htmlDocument(html, head: htmlHead) }
+            return htmlDocument(recolor.apply(html), head: meta + "<style>\(themeCSS)</style>", tail: themeOverrides)
         }
-        return textDocument(message.text ?? "")
+        return textDocument(message.text ?? "", themeCSS: themeCSS)
     }
 
     static func hasRemoteContent(_ message: ParsedMessage) -> Bool {
@@ -130,10 +141,14 @@ enum MessageHTML {
             || html.range(of: "url\\(['\"]?https?:", options: [.regularExpression, .caseInsensitive]) != nil
     }
 
-    private static let htmlHead = """
+    private static let meta = """
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'; frame-src 'none'">
+    """
+
+    /// The sender's own design, on white.
+    private static let htmlHead = meta + """
     <style>
       :root { color-scheme: light only; }
       html { -webkit-text-size-adjust: 100%; background: #ffffff; }
@@ -145,7 +160,29 @@ enum MessageHTML {
     </style>
     """
 
-    private static func htmlDocument(_ html: String) -> String {
+    /// Theme rules for HTML mail whose colors `EmailRecolor` already moved onto the theme.
+    /// Defaults use `:where` (no weight), so the email's own recolored styles win. The font, the page
+    /// edge and quoted replies are forced: they use `!important` plus `b` = `body:not(#lb)`, which
+    /// matches every body but adds id weight, and the rules go last in the page.
+    private static let themeOverrides: String = {
+        let b = "body:not(#lb)"
+        return """
+        <style>
+          :where(html) { color: var(--lb-text); font-size: var(--lb-size); line-height: 1.5; }
+          :where(a[href]) { color: var(--lb-accent); }
+          html, \(b) { background: transparent !important; }
+          \(b) { margin: 0 !important; padding: 20px 26px 32px !important; font-family: var(--lb-font) !important; overflow-wrap: anywhere; }
+          \(b) :where(*:not(img, picture, svg, svg *, video, canvas)) { font-family: inherit !important; }
+          \(b) :where(pre, code, tt, kbd, samp), \(b) :where(pre, code, tt, kbd, samp) * { font-family: ui-monospace, Menlo, monospace !important; }
+          \(b) :where(pre) { white-space: pre-wrap; }
+          \(b) :where(blockquote[type=cite]) { margin: 6px 0; padding-left: 12px; border-left: 3px solid var(--lb-line2) !important; color: var(--lb-text2) !important; }
+          \(b) :where(hr) { border: 0 !important; border-top: 1px solid var(--lb-line2) !important; }
+          \(b) img { max-width: 100%; height: auto; }
+        </style>
+        """
+    }()
+
+    private static func htmlDocument(_ html: String, head htmlHead: String, tail: String = "") -> String {
         let ns = html as NSString
         var body = cidPattern.stringByReplacingMatches(in: html, range: NSRange(location: 0, length: ns.length), withTemplate: "$1letterbox-cid:")
         let bns = body as NSString
@@ -155,10 +192,11 @@ enum MessageHTML {
         } else {
             body = "<!doctype html><html><head>\(htmlHead)</head><body>\(body)</body></html>"
         }
-        return body
+        // A <style> after </html> is moved into <body> by the parser, but still applies, and last.
+        return body + tail
     }
 
-    private static func textDocument(_ text: String) -> String {
+    private static func textDocument(_ text: String, themeCSS: String) -> String {
         var html = ""
         var depth = 0
         var inSignature = false
@@ -184,18 +222,14 @@ enum MessageHTML {
         return """
         <!doctype html><html><head><meta charset="utf-8">
         <meta http-equiv="Content-Security-Policy" content="script-src 'none'">
+        <style>\(themeCSS)</style>
         <style>
-          :root { color-scheme: light dark; }
-          body { margin: 0; padding: 20px 26px 32px; font: 14px/1.55 -apple-system, system-ui, sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; color: #1d1d1f; }
-          blockquote { margin: 2px 0; padding-left: 12px; border-left: 3px solid rgba(127,127,140,.35); color: #6e6e73; }
-          .sig { color: #8e8e93; }
-          a { color: #0a64d6; text-decoration: none; }
+          body { margin: 0; padding: 20px 26px 32px; font-family: var(--lb-font); font-size: var(--lb-size); line-height: 1.55;
+                 white-space: pre-wrap; overflow-wrap: anywhere; color: var(--lb-text); }
+          blockquote { margin: 2px 0; padding-left: 12px; border-left: 3px solid var(--lb-line2); color: var(--lb-text2); }
+          .sig { color: var(--lb-text3); }
+          a { color: var(--lb-accent); text-decoration: none; }
           a:hover { text-decoration: underline; }
-          @media (prefers-color-scheme: dark) {
-            body { color: #ececf0; }
-            blockquote { color: #a1a1a8; }
-            a { color: #5aa8ff; }
-          }
         </style></head><body>\(html)</body></html>
         """
     }
@@ -206,6 +240,70 @@ enum MessageHTML {
         if !out.contains("<a ") {
             let ons = out as NSString
             out = emailPattern.stringByReplacingMatches(in: out, range: NSRange(location: 0, length: ons.length), withTemplate: "<a href=\"mailto:$1\">$1</a>")
+        }
+        return out
+    }
+}
+
+/// The user's theme as CSS variables (`--lb-*`), with light and dark values,
+/// so mail pages follow the app's colors, font and text size.
+enum EmailThemeCSS {
+    @MainActor private static var cache: (signature: String, css: String)?
+
+    @MainActor static var current: String {
+        let settings = AppearanceSettings.shared
+        if let cache, cache.signature == settings.signature { return cache.css }
+        let css = make(settings)
+        cache = (settings.signature, css)
+        return css
+    }
+
+    @MainActor private static func make(_ settings: AppearanceSettings) -> String {
+        let p = settings.palette.colors
+        let size = (14 * settings.textSize.scale * 10).rounded() / 10
+        func vars(dark: Bool) -> String {
+            func v(_ name: String, _ color: Color) -> String { "--lb-\(name): \(rgba(color, dark: dark));" }
+            return [
+                v("text", p.text), v("text2", p.text2), v("text3", p.text3), v("accent", p.accent),
+                v("line", Theme.hairline), v("line2", Theme.strongLine),
+            ].joined(separator: " ")
+        }
+        return """
+        :root { color-scheme: \(settings.palette.alwaysDark ? "dark" : "light dark"); -webkit-text-size-adjust: 100%;
+                --lb-font: \(fontStack(settings.font)); --lb-size: \(size)px; \(vars(dark: settings.palette.alwaysDark)) }
+        @media (prefers-color-scheme: dark) { :root { \(vars(dark: true)) } }
+        """
+    }
+
+    private static func fontStack(_ font: ThemeFont) -> String {
+        switch font {
+        case .system: #"-apple-system, system-ui, "Helvetica Neue", sans-serif"#
+        case .serif: #"ui-serif, "New York", Georgia, serif"#
+        case .rounded: #"ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif"#
+        case .mono: #"ui-monospace, "SF Mono", Menlo, monospace"#
+        }
+    }
+
+    /// Moves email colors onto the theme's pane and text colors.
+    @MainActor static func recolor(dark: Bool) -> EmailRecolor {
+        let settings = AppearanceSettings.shared
+        let p = settings.palette.colors
+        let isDark = dark || settings.palette.alwaysDark
+        return EmailRecolor(background: resolve(p.panel, dark: isDark), text: resolve(p.text, dark: isDark), dark: isDark)
+    }
+
+    private static func rgba(_ color: Color, dark: Bool) -> String {
+        let c = resolve(color, dark: dark)
+        func b(_ x: Double) -> Int { Int((min(max(x, 0), 1) * 255).rounded()) }
+        return "rgba(\(b(c.r)), \(b(c.g)), \(b(c.b)), \((c.a * 1000).rounded() / 1000))"
+    }
+
+    /// Resolves an appearance-adaptive color for light or dark mode.
+    private static func resolve(_ color: Color, dark: Bool) -> EmailRecolor.RGBA {
+        var out = EmailRecolor.RGBA(r: 0, g: 0, b: 0, a: 1)
+        NSAppearance(named: dark ? .darkAqua : .aqua)?.performAsCurrentDrawingAppearance {
+            guard let c = NSColor(color).usingColorSpace(.sRGB) else { return }
+            out = .init(r: c.redComponent, g: c.greenComponent, b: c.blueComponent, a: c.alphaComponent)
         }
         return out
     }
